@@ -5,6 +5,7 @@ import {Test, console} from "forge-std/Test.sol";
 import {Poseidon2} from "../src/Poseidon.sol";
 
 contract PoseidonTest is Test {
+    
     function setUp() public {
         // No setup required for Poseidon2 library
     }
