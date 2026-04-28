@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.34;
-import {console} from "forge-std/console.sol";
 
 // Poseidon hash function implementation in Solidity
 // Implements Gnark immplementation of Poseidon2 for 6 full rounds, 50 partial rounds and 5 alpha
@@ -239,7 +238,6 @@ library Poseidon2 {
             _matMulExternal2(state);
         }
 
-				console.log("state:", state[0], compress);
         return addmod(state[1], compress, FIELD);
 	}
 
@@ -280,7 +278,6 @@ library Poseidon2 {
             _matMulExternal3(state);
         }
 
-				console.log("state:", state[0], compress);
         return addmod(state[0], compress, FIELD);
 	}
 
