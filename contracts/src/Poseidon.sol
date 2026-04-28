@@ -1,12 +1,48 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.34;
+import {console} from "forge-std/console.sol";
 
 // Poseidon hash function implementation in Solidity
 // Implements Gnark immplementation of Poseidon2 for 6 full rounds, 50 partial rounds and 5 alpha
 // support 2 or 3 inputs, implements github.com/consensys/gnark/std/permutation/poseidon2
+
 library Poseidon2 {
 
-	function KEYS_WIDTH_2() private pure returns (uint256[62] memory) {
+  uint256 internal constant FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
+	uint16 internal constant ROUNDS_FULL_HALF = 3;
+	uint16 internal constant ROUNDS_PARTIAL = 50;
+	uint16 internal constant ALPHA = 5;
+
+	function Permutation(uint256[] memory state) internal pure {
+		// Placeholder for the actual Poseidon permutation implementation
+		// This should include the full rounds, partial rounds, and the application of the S-box and MDS matrix
+	}
+
+
+// Print keys from Gnark
+// ```
+// package main
+// import (
+//     "fmt"
+//     poseidon "github.com/consensys/gnark-crypto/ecc/bn254/fr/poseidon2"
+// )
+// func printKeys(width int) {
+//     p := poseidon.NewParameters(width, 6, 50)
+//     fmt.Printf("KEYS_WIDTH_%d\n", width)
+//     for i, round := range p.RoundKeys {
+//         for _, key := range round {
+//             fmt.Printf(" %s,", key.String())
+//         }
+//         fmt.Printf(", // %d\n", i)
+//     }
+// }
+// func main() {
+//     printKeys(2)
+//     printKeys(3)
+// }
+// ```
+
+	function KEYS_WIDTH_2() internal pure returns (uint256[62] memory) {
 		return [
 			13408317191766118125459928988660904723912386643555460372160024256765517343823, 4194623319915549675396267121566035406844708410002911784811707666420946700108, // 0
 			19099132494568541378562843506451972852480776695389613033913373571860854178538, 17810419507002284709462729017811262159774061887636745099369259563571135670706, // 1
@@ -67,7 +103,7 @@ library Poseidon2 {
 		];
 	}
 
-	function KEYS_WIDTH_3() private pure returns (uint256[68] memory) {
+	function KEYS_WIDTH_3() internal pure returns (uint256[68] memory) {
 		return [
 			15677121556138137222202301000829904212509115564471417019770374089069225470772, 3932373144721242972300492384832376229914876048206101458517973361372093472394, 1813780588272124561028954243293197006811872010940675143542967874070686168124, // 0
 			14939597508592348728922311485242359295605589898459822693172568449397481558486, 588324246082178024354117103633792444536596873560146926190121793979191767318, 20539097460260731700084881225201112666253075225486468797947335182640219519885, // 1
@@ -128,12 +164,124 @@ library Poseidon2 {
 		];
 	}
 
-	function hash2(uint256[2] memory inputs) public pure returns (uint256) {
-		return inputs[0] + inputs[1]; // Placeholder for actual Poseidon hash computation
+    function add(uint256 a, uint256 b) private pure returns (uint256) {
+        return addmod(a, b, FIELD);
+    }
+
+    function mul(uint256 a, uint256 b) private pure returns (uint256) {
+        return mulmod(a, b, FIELD);
+    }
+
+		// S-box for bn254, x^5
+    function _sBox(uint256 value) private pure returns (uint256) {
+        uint256 square = mul(value, value);
+        uint256 fourth = mul(square, square);
+        return mul(fourth, value);
+    }
+
+    function _matMulExternal2(uint256[2] memory state) private pure {
+        uint256 sum = add(state[0], state[1]);
+        state[0] = add(sum, state[0]);
+        state[1] = add(sum, state[1]);
+    }
+
+    function _matMulInternal2(uint256[2] memory state) private pure {
+        uint256 sum = add(state[0], state[1]);
+        state[0] = add(state[0], sum);
+        state[1] = add(add(state[1], state[1]), sum);
+    }
+
+    function _matMulExternal3(uint256[3] memory state) private pure {
+        uint256 sum = add(add(state[0], state[1]), state[2]);
+        state[0] = add(state[0], sum);
+        state[1] = add(state[1], sum);
+        state[2] = add(state[2], sum);
+    }
+
+    function _matMulInternal3(uint256[3] memory state) private pure {
+        uint256 sum = add(add(state[0], state[1]), state[2]);
+        state[0] = add(state[0], sum);
+        state[1] = add(state[1], sum);
+        state[2] = add(add(state[2], state[2]), sum);
+    }
+
+
+	function hash2(uint256[2] memory state) public pure returns (uint256) {
+        uint256[62] memory roundKeys = KEYS_WIDTH_2();
+
+				uint256 compress = state[1];
+
+        _matMulExternal2(state);
+
+				uint16 fullRoundKeys = ROUNDS_FULL_HALF*2;
+
+        for (uint256 ki = 0; ki < fullRoundKeys; ki += 2) {
+            state[0] = add(state[0], roundKeys[ki]);
+            state[1] = add(state[1], roundKeys[ki+1]);
+            state[0] = _sBox(state[0]);
+            state[1] = _sBox(state[1]);
+            _matMulExternal2(state);
+        }
+
+				uint16 partialRoundKeys = fullRoundKeys + ROUNDS_PARTIAL;
+
+        for (uint256 ki = fullRoundKeys; ki < partialRoundKeys; ki++) {
+            state[0] = add(state[0], roundKeys[ki]);
+            state[0] = _sBox(state[0]);
+            _matMulInternal2(state);
+        }
+
+        for (uint256 ki = partialRoundKeys; ki < roundKeys.length; ki += 2) {
+            state[0] = add(state[0], roundKeys[ki]);
+            state[1] = add(state[1], roundKeys[ki+1]);
+            state[0] = _sBox(state[0]);
+            state[1] = _sBox(state[1]);
+            _matMulExternal2(state);
+        }
+
+				console.log("state:", state[0], compress);
+        return addmod(state[1], compress, FIELD);
 	}
 
-	function hash3(uint256[3] memory inputs) public pure returns (uint256) {
-		return inputs[0] + inputs[1] + inputs[2]; // Placeholder for actual Poseidon hash computation
+	function hash3(uint256[3] memory state) public pure returns (uint256) {
+		    uint256[68] memory roundKeys = KEYS_WIDTH_3();
+
+				uint256 compress = state[0];
+
+        _matMulExternal3(state);
+
+				uint16 fullRoundKeys = ROUNDS_FULL_HALF*3;
+
+        for (uint256 ki = 0; ki < fullRoundKeys; ki += 3) {
+            state[0] = add(state[0], roundKeys[ki]);
+            state[1] = add(state[1], roundKeys[ki+1]);
+            state[2] = add(state[2], roundKeys[ki+2]);
+            state[0] = _sBox(state[0]);
+            state[1] = _sBox(state[1]);
+            state[2] = _sBox(state[2]);
+            _matMulExternal3(state);
+        }
+
+				uint16 partialRoundKeys = fullRoundKeys + ROUNDS_PARTIAL;
+
+        for (uint256 ki = fullRoundKeys; ki < partialRoundKeys; ki++) {
+            state[0] = add(state[0], roundKeys[ki]);
+            state[0] = _sBox(state[0]);
+            _matMulInternal3(state);
+        }
+
+        for (uint256 ki = partialRoundKeys; ki < roundKeys.length; ki += 3) {
+            state[0] = add(state[0], roundKeys[ki]);
+            state[1] = add(state[1], roundKeys[ki+1]);
+            state[2] = add(state[2], roundKeys[ki+2]);
+            state[0] = _sBox(state[0]);
+            state[1] = _sBox(state[1]);
+            state[2] = _sBox(state[2]);
+            _matMulExternal3(state);
+        }
+
+				console.log("state:", state[0], compress);
+        return addmod(state[0], compress, FIELD);
 	}
 
 }
