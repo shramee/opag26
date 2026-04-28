@@ -218,10 +218,10 @@ library Poseidon2 {
 		state[2] = add(add(state[2], state[2]), sum);
 	}
 
-	function hash2(uint256[2] memory state) public pure returns (uint256) {
+	function hash2(uint256 a, uint256 b) public pure returns (uint256) {
 		uint256[62] memory roundKeys = KEYS_WIDTH_2();
 
-		uint256 compress = state[1];
+		uint256[2] memory state = [a, b];
 
 		_matMulExternal2(state);
 
@@ -251,13 +251,17 @@ library Poseidon2 {
 			_matMulExternal2(state);
 		}
 
-		return addmod(state[1], compress, FIELD);
+		return addmod(state[1], b, FIELD);
 	}
 
-	function hash3(uint256[3] memory state) public pure returns (uint256) {
+	function hash3(
+		uint256 a,
+		uint256 b,
+		uint256 c
+	) public pure returns (uint256) {
 		uint256[68] memory roundKeys = KEYS_WIDTH_3();
 
-		uint256 compress = state[0];
+		uint256[3] memory state = [a, b, c];
 
 		_matMulExternal3(state);
 
@@ -291,6 +295,6 @@ library Poseidon2 {
 			_matMulExternal3(state);
 		}
 
-		return addmod(state[0], compress, FIELD);
+		return addmod(state[0], a, FIELD);
 	}
 }
