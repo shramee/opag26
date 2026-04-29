@@ -6,9 +6,25 @@ import { Chamber } from "../src/Chamber.sol";
 import { DummyERC20 } from "../src/DummyERC20.sol";
 import { Poseidon2 as Hasher } from "../src/Poseidon.sol";
 
+contract MockChamberVerifier {
+	bool public shouldRevert;
+
+	function setShouldRevert(bool shouldRevert_) external {
+		shouldRevert = shouldRevert_;
+	}
+
+	function verifyProof(
+		uint256[8] calldata,
+		uint256[10] calldata
+	) external view {
+		require(!shouldRevert, "invalid proof");
+	}
+}
+
 contract ChamberTest is Test {
 	Chamber chamber;
 	DummyERC20 erc20;
+	MockChamberVerifier verifier;
 
 	address caller = address(0xb0b);
 	address ownerAddr = address(0x10e); // "joe"
@@ -22,6 +38,7 @@ contract ChamberTest is Test {
 		erc20 = new DummyERC20();
 		chamber = new Chamber(caller);
 		vm.stopPrank();
+		verifier = new MockChamberVerifier();
 	}
 
 	// ========== Helper functions (mirrors Cairo test helpers) ==========
@@ -581,5 +598,80 @@ contract ChamberTest is Test {
 		);
 
 		assertEq(erc20.balanceOf(ownerAddr), initialBal + 100000);
+	}
+
+	// ========== Verifier + ZKP tests ==========
+
+	function test_set_verifier_only_owner() public {
+		vm.prank(caller);
+		chamber.setVerifier(address(verifier));
+		assertEq(address(chamber.verifier()), address(verifier));
+
+		vm.prank(address(0xdead));
+		vm.expectRevert();
+		chamber.setVerifier(address(verifier));
+	}
+
+	function test_handle_zkp_spends_and_appends_outputs() public {
+		_deposit(0x1111, 1000);
+
+		vm.prank(caller);
+		chamber.setVerifier(address(verifier));
+
+		uint256 beforeOwnerBal = erc20.balanceOf(ownerAddr);
+		uint256 beforeChamberBal = erc20.balanceOf(address(chamber));
+		uint256[] memory beforeTxArray = chamber.getTxArray();
+
+		uint256[8] memory proof;
+		uint256[10] memory input;
+		input[0] = uint256(uint160(ownerAddr));
+		input[1] = 0;
+		input[2] = 300;
+		input[3] = uint256(uint160(address(erc20)));
+		input[4] = uint256(uint160(ownerAddr));
+		input[5] = chamber.merkleRoot();
+		input[6] = 0xabc;
+		input[7] = 0x777;
+		input[8] = 0x888;
+		input[9] = 0;
+
+		vm.prank(ownerAddr);
+		chamber.handleZkp(proof, input);
+
+		assertEq(erc20.balanceOf(ownerAddr), beforeOwnerBal + 300);
+		assertEq(erc20.balanceOf(address(chamber)), beforeChamberBal - 300);
+		assertTrue(chamber.nullified(0xabc));
+
+		uint256[] memory txArr = chamber.getTxArray();
+		assertEq(txArr.length, beforeTxArray.length + 2);
+		assertEq(txArr[txArr.length - 2], 0x777);
+		assertEq(txArr[txArr.length - 1], 0x888);
+	}
+
+	function test_handle_zkp_auth_done_allows_third_party() public {
+		_deposit(0x1111, 1000);
+
+		vm.prank(caller);
+		chamber.setVerifier(address(verifier));
+
+		uint256 beforeRecipientBal = erc20.balanceOf(newOwner);
+
+		uint256[8] memory proof;
+		uint256[10] memory input;
+		input[0] = uint256(uint160(ownerAddr));
+		input[1] = 1;
+		input[2] = 250;
+		input[3] = uint256(uint160(address(erc20)));
+		input[4] = uint256(uint160(newOwner));
+		input[5] = chamber.merkleRoot();
+		input[6] = 0xdef;
+		input[7] = 0x999;
+		input[8] = 0xaaa;
+		input[9] = 0;
+
+		vm.prank(address(0xdead));
+		chamber.handleZkp(proof, input);
+
+		assertEq(erc20.balanceOf(newOwner), beforeRecipientBal + 250);
 	}
 }
