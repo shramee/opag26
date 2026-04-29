@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import { Poseidon2 as Hasher } from "./Poseidon.sol";
 import { StoredMerkle } from "./StoredMerkle.sol";
+import { ChamberVerifier } from "./ChamberVerifier.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -20,6 +21,19 @@ contract Chamber is StoredMerkle, Ownable {
 		address addr;
 	}
 
+	struct PublicParams {
+		uint256 owner;
+		bool authDone;
+		uint256 withdrawAmt;
+		address withdrawAsset;
+		address withdrawTo;
+		uint256 merkleRoot;
+		uint256 nullifier;
+		uint256 tx1;
+		uint256 tx2;
+		uint256 payload;
+	}
+
 	/// @notice All transaction hashes in order.
 	uint256[] public txArray;
 
@@ -32,7 +46,19 @@ contract Chamber is StoredMerkle, Ownable {
 	/// @notice Nullifier tracking (prevents double-spend).
 	mapping(uint256 => bool) public nullified;
 
+	/// @notice Verifier used for Groth16 proof validation.
+	ChamberVerifier public verifier;
+
+	event VerifierUpdated(address indexed verifier);
+
 	constructor(address owner_) Ownable(owner_) {}
+
+	/// @notice Update the verifier contract used for ZK proof validation.
+	function setVerifier(address verifier_) external onlyOwner {
+		require(verifier_ != address(0), "invalid verifier");
+		verifier = ChamberVerifier(verifier_);
+		emit VerifierUpdated(verifier_);
+	}
 
 	/// @notice Hash a secret with asset address and amount.
 	/// @dev Mirrors Cairo's hash_with_asset(secrets_hash, asset, amount).
@@ -205,6 +231,48 @@ contract Chamber is StoredMerkle, Ownable {
 				originalNullifier
 			);
 		}
+	}
+
+	/// @notice Handle a ZK-validated spend and append two output transactions.
+	/// @param proof Groth16 proof in uncompressed format.
+	/// @param input Public inputs produced by the proof circuit.
+	function handleZkp(
+		uint256[8] calldata proof,
+		uint256[10] calldata input
+	) external returns (PublicParams memory params) {
+		require(address(verifier) != address(0), "verifier not set");
+
+		// Reverts if the proof is invalid or public inputs are out-of-field.
+		verifier.verifyProof(proof, input);
+
+		params = PublicParams({
+			owner: input[0],
+			authDone: input[1] == 1,
+			withdrawAmt: input[2],
+			withdrawAsset: address(uint160(input[3])),
+			withdrawTo: address(uint160(input[4])),
+			merkleRoot: input[5],
+			nullifier: input[6],
+			tx1: input[7],
+			tx2: input[8],
+			payload: input[9]
+		});
+
+		// Allows proofs against any root retained in history.
+		require(merkleRoots[params.merkleRoot], "invalid merkle proof");
+
+		_spendTransaction(
+			params.owner,
+			params.authDone,
+			params.withdrawAmt,
+			params.withdrawAsset,
+			params.withdrawTo,
+			params.nullifier
+		);
+
+		// Indistinguishability: successful ZK spend appends two outputs.
+		_addNewTx(params.tx1);
+		_addNewTx(params.tx2);
 	}
 
 	/// @notice Spend a transaction: verify auth, mark nullifier, transfer funds.
