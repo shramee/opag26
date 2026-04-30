@@ -724,6 +724,7 @@ contract ChamberTest is Test {
 
 		vm.prank(caller);
 		chamber.setVerifier(address(realVerifier));
+		vm.prank(ownerAddr);
 		chamber.handleZkp(proof, input);
 	}
 }
