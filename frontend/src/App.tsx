@@ -12,6 +12,13 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '◈' },
 ]
 
+const PROTOCOL_STATS = [
+  { label: 'TVL',          value: '$2.4M',    color: 'text-mist-green'  },
+  { label: 'Private Swaps',value: '14,832',   color: 'text-mist-purple' },
+  { label: 'LP Agents',    value: '47 online', color: 'text-mist-cyan'  },
+  { label: 'Anon Set',     value: '4,219',    color: 'text-gray-300'    },
+]
+
 function MistLogo() {
   return (
     <div className="flex items-center gap-2.5">
@@ -29,6 +36,25 @@ function MistLogo() {
   )
 }
 
+function ProtocolStatsBar() {
+  return (
+    <div className="border-b border-og-border/40 bg-og-card/30 backdrop-blur-sm">
+      <div className="max-w-lg mx-auto px-5 py-1.5 flex items-center gap-6 overflow-x-auto scrollbar-thin">
+        {PROTOCOL_STATS.map(s => (
+          <div key={s.label} className="flex items-center gap-1.5 whitespace-nowrap">
+            <span className="text-xs text-gray-600">{s.label}</span>
+            <span className={`text-xs font-semibold ${s.color}`}>{s.value}</span>
+          </div>
+        ))}
+        <div className="ml-auto flex items-center gap-1.5 whitespace-nowrap">
+          <span className="w-1.5 h-1.5 rounded-full bg-mist-green animate-pulse-slow" />
+          <span className="text-xs text-gray-600">AXL live</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   return (
     <div className="flex gap-1 bg-og-card2 border border-og-border rounded-xl p-1">
@@ -37,7 +63,9 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
           key={t.id}
           onClick={() => onChange(t.id)}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all ${
-            active === t.id ? 'bg-og-card text-white shadow-sm border border-og-border' : 'text-gray-500 hover:text-gray-300'
+            active === t.id
+              ? 'bg-og-card text-white shadow-sm border border-og-border'
+              : 'text-gray-500 hover:text-gray-300'
           }`}
         >
           <span className="text-base leading-none">{t.icon}</span>
@@ -61,14 +89,34 @@ function PoweredBy() {
       </span>
       <span className="flex items-center gap-1">
         <span className="w-1.5 h-1.5 rounded-full bg-og-blue" />
+        Gensyn AXL
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-mist-green" />
         Poseidon2 ZK
       </span>
     </div>
   )
 }
 
+const TAB_META: Record<Tab, { title: string; subtitle: string }> = {
+  swap: {
+    title: 'Private OTC Swap',
+    subtitle: 'Agent-negotiated, zero-MEV settlement via AXL',
+  },
+  deposit: {
+    title: 'Deposit into Chamber',
+    subtitle: 'Lock funds under a Poseidon2 commitment',
+  },
+  dashboard: {
+    title: 'MIST Dashboard',
+    subtitle: 'Your private notes and balances',
+  },
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>('swap')
+  const meta = TAB_META[tab]
 
   return (
     <div className="min-h-screen bg-og-dark bg-mist-glow">
@@ -80,27 +128,19 @@ export default function App() {
         </div>
       </header>
 
+      {/* Protocol stats ticker */}
+      <ProtocolStatsBar />
+
       {/* Main */}
       <main className="max-w-lg mx-auto px-4 py-6 space-y-4">
-
-        {/* Tab bar */}
         <TabBar active={tab} onChange={setTab} />
 
-        {/* Cards */}
         <div className="card glow-purple">
           {/* Card header */}
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="font-semibold text-white">
-                {tab === 'swap'      && 'Private OTC Swap'}
-                {tab === 'deposit'   && 'Deposit into Chamber'}
-                {tab === 'dashboard' && 'MIST Dashboard'}
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {tab === 'swap'      && 'Agent-negotiated, privacy-preserving settlement'}
-                {tab === 'deposit'   && 'Lock funds under a Poseidon2 commitment'}
-                {tab === 'dashboard' && 'Your private notes and balances'}
-              </p>
+              <h2 className="font-semibold text-white">{meta.title}</h2>
+              <p className="text-xs text-gray-500 mt-0.5">{meta.subtitle}</p>
             </div>
             <div className="w-8 h-8 rounded-lg bg-mist-purple/10 border border-mist-purple/20
                             flex items-center justify-center text-mist-purple text-sm">
@@ -114,15 +154,14 @@ export default function App() {
           {tab === 'dashboard' && <MistDashboard />}
         </div>
 
-        {/* Privacy notice */}
+        {/* Dark pool explainer */}
         {tab === 'swap' && (
           <div className="card-inner text-xs text-gray-500 space-y-1">
             <p className="text-gray-400 font-medium">How the Dark Pool works</p>
             <p>
-              Your swap intent is broadcast via the Gensyn AXL p2p network.
-              LP agents bid privately, locking their side into a MIST ZK escrow.
-              You then deposit your side into Chamber to complete the atomic swap —
-              with no MEV exposure and no on-chain footprint linking the parties.
+              Your swap intent is broadcast via Gensyn AXL p2p. LP agents bid privately on 0G Testnet,
+              locking their side into a MIST ZK escrow. You deposit your side into Chamber to complete
+              the atomic swap — no MEV exposure, no on-chain link between parties.
             </p>
           </div>
         )}
