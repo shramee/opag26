@@ -118,10 +118,7 @@ contract StoredMerkle {
 		uint256 node = leaf;
 
 		while (lenAtHeight(level) != 1) {
-			if (index % 2 == 0) {
-				// even index => pair with 0
-				node = Hasher.hash2(0, node);
-			} else {
+			if (index % 2 != 0) {
 				// odd index => pair with previous leaf
 				uint256 pairedNode = readLeaf(level, index - 1);
 				if (node < pairedNode) {
@@ -129,6 +126,8 @@ contract StoredMerkle {
 				} else {
 					node = Hasher.hash2(pairedNode, node);
 				}
+			} else {
+				// even index => no sibling yet, carry the node upward unchanged
 			}
 			level++;
 			index /= 2;
@@ -148,16 +147,28 @@ contract StoredMerkle {
 		uint256 index
 	) public view returns (uint256[] memory proof) {
 		uint256 h = height();
-		proof = new uint256[](h);
+		uint256[] memory proofBuffer = new uint256[](h);
+		uint256 proofLen = 0;
 		uint256 currentIndex = index;
 
 		for (uint256 i = 0; i < h; i++) {
+			uint256 levelLen = lenAtHeight(i);
 			if (currentIndex % 2 == 0) {
-				proof[i] = readLeaf(i, currentIndex + 1);
+				uint256 siblingIndex = currentIndex + 1;
+				if (siblingIndex < levelLen) {
+					proofBuffer[proofLen] = readLeaf(i, siblingIndex);
+					proofLen++;
+				}
 			} else {
-				proof[i] = readLeaf(i, currentIndex - 1);
+				proofBuffer[proofLen] = readLeaf(i, currentIndex - 1);
+				proofLen++;
 			}
 			currentIndex /= 2;
+		}
+
+		proof = new uint256[](proofLen);
+		for (uint256 i = 0; i < proofLen; i++) {
+			proof[i] = proofBuffer[i];
 		}
 	}
 
@@ -187,31 +198,27 @@ contract StoredMerkle {
 	}
 
 	/// @notice Compute the next level from a set of nodes (internal helper).
-	/// @dev Pads odd-length arrays with 0. Uses sorted pair hashing.
+	/// @dev Carries an odd trailing node upward unchanged. Uses sorted pair hashing.
 	function _computeNextLevel(
 		uint256[] memory nodes
 	) internal pure returns (uint256[] memory nextLevel) {
 		uint256 len = nodes.length;
-		// Pad if odd
-		uint256[] memory padded = nodes;
-		if (len % 2 != 0) {
-			padded = new uint256[](len + 1);
-			for (uint256 i = 0; i < len; i++) {
-				padded[i] = nodes[i];
+		nextLevel = new uint256[]((len + 1) / 2);
+		uint256 nextIndex = 0;
+
+		for (uint256 i = 0; i + 1 < len; i += 2) {
+			uint256 left = nodes[i];
+			uint256 right = nodes[i + 1];
+			if (left < right) {
+				nextLevel[nextIndex] = Hasher.hash2(left, right);
+			} else {
+				nextLevel[nextIndex] = Hasher.hash2(right, left);
 			}
-			padded[len] = 0;
-			len = len + 1;
+			nextIndex++;
 		}
 
-		nextLevel = new uint256[](len / 2);
-		for (uint256 i = 0; i < len; i += 2) {
-			uint256 left = padded[i];
-			uint256 right = padded[i + 1];
-			if (left < right) {
-				nextLevel[i / 2] = Hasher.hash2(left, right);
-			} else {
-				nextLevel[i / 2] = Hasher.hash2(right, left);
-			}
+		if (len % 2 != 0) {
+			nextLevel[nextIndex] = nodes[len - 1];
 		}
 	}
 }
