@@ -10,26 +10,33 @@ interface Token {
 }
 
 const TOKENS: Token[] = [
-  { symbol: 'ETH',  name: 'Ether',        address: '0x0000000000000000000000000000000000000000', decimals: 18 },
-  { symbol: 'USDC', name: 'USD Coin',      address: '',  decimals: 6 },
-  { symbol: 'USDT', name: 'Tether USD',    address: '',  decimals: 6 },
-  { symbol: 'WBTC', name: 'Wrapped BTC',   address: '',  decimals: 8 },
-  { symbol: 'DumE20', name: 'DummyERC20',  address: import.meta.env.VITE_TOKEN_ADDRESS || '', decimals: 18 },
+  { symbol: 'ETH',    name: 'Ether',      address: '0x0000000000000000000000000000000000000000', decimals: 18 },
+  { symbol: 'USDC',   name: 'USD Coin',   address: '', decimals: 6 },
+  { symbol: 'USDT',   name: 'Tether USD', address: '', decimals: 6 },
+  { symbol: 'WBTC',   name: 'Wrapped BTC',address: '', decimals: 8 },
+  { symbol: 'DumE20', name: 'DummyERC20', address: import.meta.env.VITE_TOKEN_ADDRESS || '', decimals: 18 },
 ]
 
-type AgentStep =
-  | { id: 'broadcast'; label: 'Broadcasting swap intent…'; done: false }
-  | { id: 'discovery'; label: 'Discovered 3 LP agents'; done: boolean }
-  | { id: 'negotiate'; label: 'Negotiating best rate…'; done: boolean }
-  | { id: 'lock';      label: 'LP locking funds in MIST escrow…'; done: boolean }
-  | { id: 'settle';    label: 'Ready to settle'; done: boolean }
+interface LPAgent {
+  id: string
+  address: string
+  quoteMultiplier: number // applied to base rate
+  repScore: number
+  latencyMs: number
+}
 
-const STEPS: AgentStep[] = [
-  { id: 'broadcast', label: 'Broadcasting swap intent…', done: false },
-  { id: 'discovery', label: 'Discovered 3 LP agents',   done: false },
-  { id: 'negotiate', label: 'Negotiating best rate…',   done: false },
-  { id: 'lock',      label: 'LP locking funds in MIST escrow…', done: false },
-  { id: 'settle',    label: 'Ready to settle',          done: false },
+const LP_AGENTS: LPAgent[] = [
+  { id: 'lp1', address: '0x9f3a…d82c', quoteMultiplier: 1.0004, repScore: 98, latencyMs: 1200 },
+  { id: 'lp2', address: '0x4b2e…f91a', quoteMultiplier: 0.9985, repScore: 95, latencyMs: 800  },
+  { id: 'lp3', address: '0x7c1d…a34f', quoteMultiplier: 1.0001, repScore: 97, latencyMs: 2100 },
+]
+
+const AGENT_STEPS = [
+  'Broadcasting swap intent to AXL network…',
+  'Discovered 3 LP agents on 0G mesh',
+  'Agents bidding — negotiating best rate…',
+  'Best LP locking funds in MIST escrow…',
+  'Private deal matched · Settlement ready',
 ]
 
 type SwapPhase = 'input' | 'negotiating' | 'settled'
@@ -42,7 +49,7 @@ function TokenSelect({ value, onChange }: { value: Token; onChange: (t: Token) =
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-2 bg-og-card border border-og-border rounded-xl px-3 py-2 hover:border-og-border2 transition-colors"
       >
-        <span className="w-6 h-6 rounded-full bg-gradient-to-br from-mist-purple to-mist-cyan flex items-center justify-center text-xs font-bold">
+        <span className="w-6 h-6 rounded-full bg-gradient-to-br from-mist-purple to-mist-cyan flex items-center justify-center text-xs font-bold text-white">
           {value.symbol[0]}
         </span>
         <span className="font-semibold text-sm">{value.symbol}</span>
@@ -51,14 +58,14 @@ function TokenSelect({ value, onChange }: { value: Token; onChange: (t: Token) =
         </svg>
       </button>
       {open && (
-        <div className="absolute top-full mt-1 left-0 z-50 w-44 bg-og-card border border-og-border rounded-xl shadow-xl overflow-hidden">
+        <div className="absolute top-full mt-1 left-0 z-50 w-48 bg-og-card border border-og-border rounded-xl shadow-xl overflow-hidden">
           {TOKENS.map(t => (
             <button
               key={t.symbol}
               className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-og-card2 transition-colors text-left"
               onClick={() => { onChange(t); setOpen(false) }}
             >
-              <span className="w-6 h-6 rounded-full bg-gradient-to-br from-mist-purple to-mist-cyan flex items-center justify-center text-xs font-bold">
+              <span className="w-6 h-6 rounded-full bg-gradient-to-br from-mist-purple to-mist-cyan flex items-center justify-center text-xs font-bold text-white">
                 {t.symbol[0]}
               </span>
               <div>
@@ -73,20 +80,59 @@ function TokenSelect({ value, onChange }: { value: Token; onChange: (t: Token) =
   )
 }
 
-function StepIcon({ active, done }: { active: boolean; done: boolean }) {
-  if (done) return (
-    <span className="w-5 h-5 rounded-full bg-mist-green flex items-center justify-center flex-shrink-0">
-      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-      </svg>
-    </span>
+function StepRow({ label, done, active }: { label: string; done: boolean; active: boolean }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <div className="mt-0.5 flex-shrink-0">
+        {done ? (
+          <span className="w-4 h-4 rounded-full bg-mist-green flex items-center justify-center">
+            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          </span>
+        ) : active ? (
+          <span className="w-4 h-4 rounded-full border-2 border-mist-purple flex items-center justify-center">
+            <span className="w-1.5 h-1.5 rounded-full bg-mist-purple animate-pulse-slow" />
+          </span>
+        ) : (
+          <span className="w-4 h-4 rounded-full border border-og-border2" />
+        )}
+      </div>
+      <span className={`text-xs leading-relaxed ${done ? 'text-gray-300' : active ? 'text-white' : 'text-gray-600'}`}>
+        {label}
+      </span>
+    </div>
   )
-  if (active) return (
-    <span className="w-5 h-5 rounded-full border-2 border-mist-purple flex items-center justify-center flex-shrink-0">
-      <span className="w-1.5 h-1.5 rounded-full bg-mist-purple animate-pulse-slow" />
-    </span>
+}
+
+function LPBidRow({
+  agent, baseRate, toSymbol, isBest, visible,
+}: {
+  agent: LPAgent; baseRate: number; toSymbol: string; isBest: boolean; visible: boolean
+}) {
+  if (!visible) return null
+  const quote = baseRate * agent.quoteMultiplier
+  return (
+    <div className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-all ${
+      isBest ? 'border-mist-green/40 bg-mist-green/5' : 'border-og-border bg-og-dark/40'
+    }`}>
+      <div className="flex items-center gap-2 min-w-0">
+        <span className={`w-1.5 h-1.5 flex-shrink-0 rounded-full ${isBest ? 'bg-mist-green' : 'bg-gray-600'}`} />
+        <span className="font-mono text-xs text-gray-400 truncate">{agent.address}</span>
+        {isBest && (
+          <span className="flex-shrink-0 text-xs bg-mist-green/20 text-mist-green px-1.5 py-0.5 rounded font-semibold">
+            BEST
+          </span>
+        )}
+      </div>
+      <div className="text-right ml-3 flex-shrink-0">
+        <p className={`text-xs font-semibold ${isBest ? 'text-mist-green' : 'text-gray-400'}`}>
+          {quote.toFixed(4)} {toSymbol}
+        </p>
+        <p className="text-xs text-gray-600">{agent.repScore}% rep</p>
+      </div>
+    </div>
   )
-  return <span className="w-5 h-5 rounded-full border border-og-border2 flex-shrink-0" />
 }
 
 export function SwapForm() {
@@ -98,18 +144,22 @@ export function SwapForm() {
   const [slippage, setSlippage]   = useState('0.5')
   const [phase, setPhase]         = useState<SwapPhase>('input')
   const [stepIdx, setStepIdx]     = useState(0)
+  const [visibleLPs, setVisibleLPs] = useState(0)
 
   const isConnected = !!address && chain?.id === zeroGTestnet.id
   const canSwap = isConnected && !!fromAmount && Number(fromAmount) > 0
 
-  // Simulated quote: 1 ETH ≈ 2800 USDC
-  const RATE: Record<string, Record<string, number>> = {
-    ETH:  { USDC: 2800, USDT: 2799.5, WBTC: 0.063, DumE20: 1000 },
+  const BASE_RATES: Record<string, Record<string, number>> = {
+    ETH:  { USDC: 2800, USDT: 2799, WBTC: 0.063, DumE20: 1000 },
     USDC: { ETH: 1/2800, WBTC: 1/44000, DumE20: 0.0004 },
+    USDT: { ETH: 1/2799, USDC: 1 },
+    WBTC: { ETH: 1/0.063, USDC: 44000 },
+    DumE20: { ETH: 0.001, USDC: 2500 },
   }
-  const rate = RATE[fromToken.symbol]?.[toToken.symbol]
-  const toAmount = rate && fromAmount ? (Number(fromAmount) * rate).toFixed(6) : '—'
-  const priceImpact = fromAmount && Number(fromAmount) > 100 ? '< 0.01%' : '< 0.01%'
+  const rate = BASE_RATES[fromToken.symbol]?.[toToken.symbol]
+  const bestLP = LP_AGENTS[0] // highest multiplier
+  const effectiveRate = rate ? rate * bestLP.quoteMultiplier : undefined
+  const toAmount = effectiveRate && fromAmount ? (Number(fromAmount) * effectiveRate).toFixed(6) : '—'
 
   function flipTokens() {
     setFromToken(toToken)
@@ -120,18 +170,20 @@ export function SwapForm() {
   function initiateSwap() {
     setPhase('negotiating')
     setStepIdx(0)
-    // Simulate agent negotiation
-    const delays = [1200, 2000, 3200, 5000]
-    delays.forEach((d, i) => {
-      setTimeout(() => setStepIdx(i + 1), d)
-    })
-    setTimeout(() => setPhase('settled'), 6500)
+    setVisibleLPs(0)
+    const stepDelays = [1300, 2600, 4000, 5600]
+    stepDelays.forEach((d, i) => setTimeout(() => setStepIdx(i + 1), d))
+    setTimeout(() => setVisibleLPs(1), 3000)
+    setTimeout(() => setVisibleLPs(2), 3400)
+    setTimeout(() => setVisibleLPs(3), 3800)
+    setTimeout(() => setPhase('settled'), 7200)
   }
 
   function reset() {
     setPhase('input')
     setStepIdx(0)
     setFromAmount('')
+    setVisibleLPs(0)
   }
 
   return (
@@ -182,13 +234,13 @@ export function SwapForm() {
         </div>
       </div>
 
-      {/* Trade details */}
-      {fromAmount && Number(fromAmount) > 0 && (
+      {/* Trade details — only in input phase */}
+      {phase === 'input' && fromAmount && Number(fromAmount) > 0 && rate && (
         <div className="card-inner space-y-1.5 text-xs">
           <div className="flex justify-between text-gray-500">
             <span>Rate</span>
             <span className="text-gray-300">
-              1 {fromToken.symbol} ≈ {rate?.toFixed(4) ?? '—'} {toToken.symbol}
+              1 {fromToken.symbol} ≈ {(rate * bestLP.quoteMultiplier).toFixed(4)} {toToken.symbol}
             </span>
           </div>
           <div className="flex justify-between text-gray-500">
@@ -206,26 +258,32 @@ export function SwapForm() {
           </div>
           <div className="flex justify-between text-gray-500">
             <span>Price impact</span>
-            <span className="text-mist-green">{priceImpact}</span>
+            <span className="text-mist-green">{'< 0.01%'}</span>
           </div>
           <div className="flex justify-between text-gray-500">
-            <span>Route</span>
-            <span className="text-gray-300">MIST Privacy Protocol</span>
+            <span>Network</span>
+            <span className="text-gray-300">AXL p2p · 0G Testnet</span>
           </div>
           <div className="flex justify-between text-gray-500">
             <span>Settlement</span>
-            <span className="text-gray-300">Private · ~30s</span>
+            <span className="text-gray-300">MIST ZK escrow · ~30s</span>
           </div>
         </div>
       )}
 
-      {/* Agent status panel */}
+      {/* Agent negotiation panel */}
       {phase !== 'input' && (
         <div className="card-inner border border-mist-purple/20 space-y-3">
+          {/* Header */}
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-mist-purple">
-              {phase === 'settled' ? 'Agent matched a deal' : 'Agent negotiating…'}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${
+                phase === 'settled' ? 'bg-mist-green' : 'bg-mist-purple animate-pulse-slow'
+              }`} />
+              <span className="text-sm font-medium text-mist-purple">
+                {phase === 'settled' ? 'Deal matched · AXL' : 'Broker agent negotiating via AXL…'}
+              </span>
+            </div>
             {phase === 'negotiating' && (
               <svg className="w-4 h-4 text-mist-purple animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -233,40 +291,66 @@ export function SwapForm() {
               </svg>
             )}
           </div>
-          <div className="space-y-2.5">
-            {STEPS.map((step, i) => {
-              const done   = i < stepIdx
-              const active = i === stepIdx && phase === 'negotiating'
-              return (
-                <div key={step.id} className="flex items-center gap-2.5">
-                  <StepIcon active={active} done={done} />
-                  <span className={`text-xs ${done ? 'text-gray-300' : active ? 'text-white' : 'text-gray-600'}`}>
-                    {step.label}
-                  </span>
-                </div>
-              )
-            })}
+
+          {/* Step list */}
+          <div className="space-y-2">
+            {AGENT_STEPS.map((label, i) => (
+              <StepRow
+                key={i}
+                label={label}
+                done={i < stepIdx}
+                active={i === stepIdx && phase === 'negotiating'}
+              />
+            ))}
           </div>
 
+          {/* LP Bids */}
+          {visibleLPs > 0 && rate && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-xs text-gray-600 font-medium uppercase tracking-wide">
+                LP Agents Bidding
+              </p>
+              {LP_AGENTS.map((lp, i) => (
+                <LPBidRow
+                  key={lp.id}
+                  agent={lp}
+                  baseRate={rate}
+                  toSymbol={toToken.symbol}
+                  isBest={lp.id === bestLP.id}
+                  visible={i < visibleLPs}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Settled summary */}
           {phase === 'settled' && (
             <div className="border-t border-og-border pt-3 space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500">Matched LP</span>
+                <span className="font-mono text-gray-400">{bestLP.address}</span>
+              </div>
               <div className="flex justify-between text-xs">
                 <span className="text-gray-500">Best quote</span>
                 <span className="font-semibold text-mist-green">{toAmount} {toToken.symbol}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500">LP Agent</span>
-                <span className="font-mono text-gray-400">0x9f3a…d82c</span>
+                <span className="text-gray-500">LP Reputation</span>
+                <span className="text-gray-300">{bestLP.repScore}%</span>
               </div>
-              <p className="text-xs text-amber-400 bg-amber-900/10 border border-amber-800/30 rounded-lg px-3 py-2">
-                Proceed to the <strong>Deposit</strong> tab to complete the private settlement.
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500">MIST Escrow</span>
+                <span className="text-mist-green">Locked ✓</span>
+              </div>
+              <p className="text-xs text-amber-400 bg-amber-900/10 border border-amber-800/30 rounded-lg px-3 py-2 mt-1">
+                Proceed to the <strong>Deposit</strong> tab to complete private settlement.
               </p>
             </div>
           )}
         </div>
       )}
 
-      {/* CTA */}
+      {/* CTA button */}
       {phase === 'input' && (
         <button
           className="btn-primary w-full py-4 text-base glow-purple"
@@ -282,13 +366,11 @@ export function SwapForm() {
                 : `Swap ${fromToken.symbol} → ${toToken.symbol} Privately`}
         </button>
       )}
-
       {phase === 'negotiating' && (
         <button className="btn-ghost w-full py-4 text-sm" disabled>
-          <span className="animate-pulse">Agent working…</span>
+          <span className="animate-pulse">Agent negotiating via AXL…</span>
         </button>
       )}
-
       {phase === 'settled' && (
         <button className="btn-ghost w-full py-2 text-sm" onClick={reset}>
           New swap
