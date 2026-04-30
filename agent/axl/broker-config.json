@@ -1,0 +1,17 @@
+{
+  "yggdrasil": {
+    "private_key_path": "broker-node.key",
+    "peers": [
+      "tls://bootstrap1.gensyn.ai:9001",
+      "tls://bootstrap2.gensyn.ai:9001"
+    ],
+    "listen": ""
+  },
+  "node": {
+    "api_port": 9002,
+    "bridge_address": "127.0.0.1",
+    "tcp_listener_port": 7000,
+    "message_size_limit": 16777216,
+    "max_connections": 128
+  }
+}

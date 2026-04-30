@@ -1,0 +1,17 @@
+{
+  "name": "dark-pool-otc-agent",
+  "version": "1.0.0",
+  "description": "0G Storage and Compute helpers for OTC LP agents",
+  "type": "module",
+  "scripts": {
+    "install:0g": "npm install"
+  },
+  "dependencies": {
+    "@0gfoundation/0g-ts-sdk": "^0.3.4",
+    "@0glabs/0g-serving-broker": "^1.0.0",
+    "ethers": "^6.13.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

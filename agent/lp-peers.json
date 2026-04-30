@@ -1,0 +1,4 @@
+{
+  "_comment": "Add AXL peer IDs of known LP agents here. Get a peer's ID by running: curl http://127.0.0.1:9002/topology",
+  "peers": []
+}
