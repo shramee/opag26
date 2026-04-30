@@ -6,6 +6,7 @@ import { Chamber } from "../src/Chamber.sol";
 import { ChamberVerifier } from "../src/ChamberVerifier.sol";
 import { DummyERC20 } from "../src/DummyERC20.sol";
 import { Poseidon2 as Hasher } from "../src/Poseidon.sol";
+import { console } from "forge-std/console.sol";
 
 contract MockChamberVerifier {
 	bool public shouldRevert;
@@ -29,15 +30,18 @@ contract ChamberTest is Test {
 	ChamberVerifier realVerifier;
 
 	address caller = address(0xb0b);
-	address ownerAddr = address(0x10e); // "joe"
-	address newOwner = address(0x1111); // "jill"
+	address ownerAddr = address(0x6a6f65); // "joe"
+	address newOwner = address(0x6a696c6c); // "jill"
 
-	uint256 constant CLAIMING_KEY = 12345;
+	uint256 constant CLAIMING_KEY = 0x6162726163616461627261; // 'abracadabra'
 	uint256 constant NEW_CLAIMING_KEY = CLAIMING_KEY + 5;
 
 	function setUp() public {
 		vm.startPrank(caller);
-		erc20 = new DummyERC20();
+		deployCodeTo("DummyERC20.sol", address(0x5544332211));
+		erc20 = DummyERC20(address(0x5544332211));
+
+		// erc20 = new DummyERC20();
 		chamber = new Chamber(caller);
 		vm.stopPrank();
 		verifier = new MockChamberVerifier();
@@ -121,7 +125,6 @@ contract ChamberTest is Test {
 		);
 
 		// Withdraw the transaction at index 5 (amount=1, key=0xf5)
-		uint256[] memory txArr = chamber.getTxArray();
 		uint256[] memory proof = chamber.computeProof(5);
 
 		vm.prank(ownerAddr);
@@ -163,8 +166,8 @@ contract ChamberTest is Test {
 	}
 
 	function test_deposit_duplicate_transaction() public {
-		uint256 hash_ = 0x1234;
-		_deposit(hash_, 100);
+		uint256 hash_ = 0x0;
+		_deposit(hash_, 10000);
 
 		vm.startPrank(caller);
 		erc20.approve(address(chamber), 100);
@@ -178,7 +181,6 @@ contract ChamberTest is Test {
 	function test_withdraw_no_zk() public {
 		_withdrawalSetup();
 
-		uint256[] memory txArr = chamber.getTxArray();
 		uint256[] memory proof = chamber.computeProof(7);
 
 		uint256 initialBal = erc20.balanceOf(ownerAddr);
@@ -202,7 +204,6 @@ contract ChamberTest is Test {
 	function test_seek_and_hide_only_owner() public {
 		_withdrawalSetup();
 
-		uint256[] memory txArr = chamber.getTxArray();
 		uint256[] memory proof = chamber.computeProof(7);
 
 		uint256 newTxSecret = Hasher.hash2(
@@ -227,7 +228,6 @@ contract ChamberTest is Test {
 	function test_third_party_withdraw() public {
 		_withdrawalSetup();
 
-		uint256[] memory txArr = chamber.getTxArray();
 		uint256[] memory proof = chamber.computeProof(7);
 
 		uint256 initialBal = erc20.balanceOf(ownerAddr);
@@ -253,7 +253,6 @@ contract ChamberTest is Test {
 	function test_seek_and_hide_no_zk() public {
 		_withdrawalSetup();
 
-		uint256[] memory txArr = chamber.getTxArray();
 		uint256[] memory proof = chamber.computeProof(7);
 
 		uint256 newTxSecret = Hasher.hash2(
@@ -286,7 +285,6 @@ contract ChamberTest is Test {
 	function test_seek_and_hide_no_zk_hidden_tx() public {
 		_withdrawalSetup();
 
-		uint256[] memory txArr = chamber.getTxArray();
 		uint256[] memory proof = chamber.computeProof(7);
 
 		// Wrap in new tx with different owner
@@ -341,7 +339,6 @@ contract ChamberTest is Test {
 	function test_double_spend() public {
 		(, uint256 key, uint256 amt) = _withdrawalSetup();
 
-		uint256[] memory txArr = chamber.getTxArray();
 		uint256[] memory proof = chamber.computeProof(5);
 
 		vm.prank(ownerAddr);
@@ -352,7 +349,6 @@ contract ChamberTest is Test {
 	function test_double_spend_hide_and_seek() public {
 		(, uint256 key, uint256 amt) = _withdrawalSetup();
 
-		uint256[] memory txArr = chamber.getTxArray();
 		uint256[] memory proof = chamber.computeProof(5);
 
 		vm.prank(ownerAddr);
@@ -363,7 +359,6 @@ contract ChamberTest is Test {
 	function test_double_spend_withdraw_then_seek() public {
 		_withdrawalSetup();
 
-		uint256[] memory txArr = chamber.getTxArray();
 		uint256[] memory proof = chamber.computeProof(7);
 
 		vm.startPrank(ownerAddr);
@@ -376,7 +371,6 @@ contract ChamberTest is Test {
 		);
 
 		// Try seek_and_hide on same transaction
-		txArr = chamber.getTxArray();
 		proof = chamber.computeProof(7);
 
 		vm.expectRevert("transaction is spent");
@@ -395,7 +389,6 @@ contract ChamberTest is Test {
 	function test_double_spend_seek_then_withdraw() public {
 		_withdrawalSetup();
 
-		uint256[] memory txArr = chamber.getTxArray();
 		uint256[] memory proof = chamber.computeProof(7);
 
 		uint256 newTxSecret = Hasher.hash2(
@@ -415,7 +408,6 @@ contract ChamberTest is Test {
 		);
 
 		// Try withdraw on same transaction
-		txArr = chamber.getTxArray();
 		proof = chamber.computeProof(7);
 
 		vm.expectRevert("transaction is spent");
@@ -434,7 +426,6 @@ contract ChamberTest is Test {
 	function test_withdraw_wrong_path() public {
 		_withdrawalSetup();
 
-		uint256[] memory txArr = chamber.getTxArray();
 		// Use proof for index 0 instead of 7
 		uint256[] memory wrongProof = chamber.computeProof(0);
 
@@ -466,8 +457,8 @@ contract ChamberTest is Test {
 	function test_tx_array() public {
 		_deposit(0x1111, 100);
 		_deposit(0x2222, 200);
-
 		uint256[] memory txArr = chamber.getTxArray();
+
 		assertEq(txArr.length, 2);
 	}
 
@@ -575,8 +566,7 @@ contract ChamberTest is Test {
 		assertEq(erc20.balanceOf(address(chamber)), amount1 + amount2);
 
 		// Both tx should be in the array
-		uint256[] memory txArr = chamber.getTxArray();
-		assertEq(txArr.length, 2);
+		assertEq(chamber.getTxArray().length, 2);
 	}
 
 	// ========== Edge case: withdraw with zero-value newTxAmount ==========
@@ -584,7 +574,6 @@ contract ChamberTest is Test {
 	function test_full_withdrawal_via_seek_and_hide() public {
 		_withdrawalSetup();
 
-		uint256[] memory txArr = chamber.getTxArray();
 		uint256[] memory proof = chamber.computeProof(7);
 
 		uint256 initialBal = erc20.balanceOf(ownerAddr);
@@ -644,8 +633,8 @@ contract ChamberTest is Test {
 		assertEq(erc20.balanceOf(ownerAddr), beforeOwnerBal + 300);
 		assertEq(erc20.balanceOf(address(chamber)), beforeChamberBal - 300);
 		assertTrue(chamber.nullified(0xabc));
-
 		uint256[] memory txArr = chamber.getTxArray();
+
 		assertEq(txArr.length, beforeTxArray.length + 2);
 		assertEq(txArr[txArr.length - 2], 0x777);
 		assertEq(txArr[txArr.length - 1], 0x888);
@@ -679,28 +668,57 @@ contract ChamberTest is Test {
 	}
 
 	function test_handle_zkp_real_proof_params() public {
+		_withdrawalSetup();
 
+		// {
+		//   "Ar": {
+		//     "X": "19736442097160619192768540409670959456185810498602414919154852253035558235352",
+		//     "Y": "3489338710417729951925139801199595377097832610139045609042733091986591860191"
+		//   },
+		//   "Krs": {
+		//     "X": "21797822751876009167954625985771102864378950589605674148892608769314198746627",
+		//     "Y": "20956742334324173876297978045711111162720061649422857674216911713309458009883"
+		//   },
+		//   "Bs": {
+		//     "X": {
+		//       "A0": "246664391616423933576093789780463787542133773475550552738397811400920481467",
+		//       "A1": "19659447899510155424682102833984541568481626818680476129736047490627505335260"
+		//     },
+		//     "Y": {
+		//       "A0": "1060264115799393559259843908246125534349846104129386201559207506102948869420",
+		//       "A1": "20398213997739016703055037189642665255827359010540522915818387080985077466102"
+		//     }
+		//   },
+		//   "Commitments": [],
+		//   "CommitmentPok": {
+		//     "X": 0,
+		//     "Y": 0
+		//   }
+		// }
 		uint256[8] memory proof = [
-			19736442097160619192768540409670959456185810498602414919154852253035558235352,
-			3489338710417729951925139801199595377097832610139045609042733091986591860191,
-			246664391616423933576093789780463787542133773475550552738397811400920481467,
-			19659447899510155424682102833984541568481626818680476129736047490627505335260,
-			1060264115799393559259843908246125534349846104129386201559207506102948869420,
-			20398213997739016703055037189642665255827359010540522915818387080985077466102,
-			21797822751876009167954625985771102864378950589605674148892608769314198746627,
-			20956742334324173876297978045711111162720061649422857674216911713309458009883
+			// A
+			8419781907364661232605006876888706792256902851481984310737695334456173738688,
+			5344869841273244868428765452271597216279543645414822364651440481202869651054,
+			// B
+			4916376346212476374087690660415486944304012342210848195834457958998848298826,
+			18489577201216426729118623230401896107938535462919164125701924066637770959808,
+			16900097455702739308671898524007570737561222752013363400254059052470764027292,
+			3260284994644675747697299868388841680954712582705794610167989526302057865388,
+			// C/Krs
+			7849890362774107106639267730621524999303396603976069504593303766405110930074,
+			21759230528423569920389304545370447774449471582744542050689720111583147416479
 		];
 
 		uint256[10] memory input = [
 			6975333,
 			0,
 			97500,
-			1144022798169253328525803632930404416797185922853879902368195142838760174561,
+			366216421905,
 			723713,
-			11402488954905274699035045812898916448161870642682362089225182747648261522955,
-			5019339604212232730570900705368530083697760804650143795776013915548077286447,
-			7819865104477025542056490010245371931472441593688757656714357970670562452766,
-			5440099144717804486365413326721007562901980536546103113370629408967033105336,
+			3763585553850047511707113623502126536790765865212457401143583307870173564545,
+			18570464259347710633824634281712918237928574399124869843291722196780967352717,
+			5767009915179309447646985471627778547053176079826674037153520709224318784859,
+			13829237370010845041830333812681376255535228906923324686727912457092848019286,
 			22589849925009732
 		];
 
