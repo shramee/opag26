@@ -2,3 +2,5 @@
 /contracts/cache
 /contracts/.env
 /contracts/broadcast
+**/.env
+**/node_modules

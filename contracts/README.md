@@ -1,66 +1,46 @@
-## Foundry
+# Contracts | MIST OTC
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
-
-Foundry consists of:
-
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
-
-## Documentation
-
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
-```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
+## Setup
 
 ### Deploy
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+```sh
+./deploy.sh --broadcast
 ```
 
-### Cast
+## Escrow contract
 
-```shell
-$ cast <subcommand>
+Escrow contract manages permissionless and private escrow.
+
+### An escrow
+
+An escrow is a private payment in MIST.cash that encodes unlocking transaction condition.
+
+For the discussion below we will assume John is trying to put `100Eth` in escrow for Jane who can withdraw the amount if she locks `1,000,000 USDC`
+
+### Creating an escrow
+
+Private notes in MIST.cash contain recipient, token and amount along with a blinding vector.
+
+```
+tx_secret = Hash( recipient, blinding )
+note = Hash( tx_secret, token, amount )
 ```
 
-### Help
+The blinding vector can contain further details, an escrow note looks lik this
 
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
 ```
+escrow_blinding = Hash( expected_tx, blinding )
+tx_secret = Hash( ESCROW_CONTRACT, escrow_blinding )
+escrow_note = Hash( tx_secret, token, amount )
+```
+
+This transaction is created just like any other transaction and does not leak any distinguishable information.
+
+### Consuming an escrow
+
+Consuming an escrow uses two proofs,
+1. Escrow tx existance proof, merkle proof for existance of `expected_tx` in MIST.cash transacitons.
+   - This proves that required transaction now exists in MIST.cash, we don't check if it is already spent for privacy.
+2. MIST escrow_note spending proof.
+   - The recipient generates the proof to withdraw the transaction to their own account. Contract forwards this proof directly to MIST.cash spending the escrow transaction.
