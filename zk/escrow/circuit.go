@@ -22,18 +22,20 @@ import (
 //
 
 type EscrowCircuit struct {
-	// secret/claiming key
+	// escrow blinding vector
 	Blinding Variable
 
-	Owner   Variable `gnark:",public"` // This will be the escrow contract
+	// This will be the escrow contract
+	Owner Variable `gnark:",public"`
+	// assets in escrow
 	TxAsset Asset
-	Amount  Variable // Assets locked by escrowee
-	Addr    Variable // Assets locked by escrowee
 
+	// compared against spent transaction
+	// binds expected tx to escrowed transaction
 	EscrowNullifier Variable `gnark:",public"` // This should match the nullifier of tx to spend
 
 	// expected transaction should be in the merkle root
-	ExpectedTx  Asset
+	ExpectedTx  Variable
 	MerkleProof [20]Variable
 	MerkleRoot  Variable `gnark:",public"`
 }
@@ -45,9 +47,8 @@ func (circuit *EscrowCircuit) Define(api frontend.API) error {
 
 	// check escrow transaction nullifier
 	txBlinding := Hash2(api, circuit.Blinding, circuit.ExpectedTx)
-	txSecret := Hash2(api, txBlinding, circuit.Owner)
 
-	nullifierSecret := Hash2(api, api.Add(txSecret, 1), circuit.Owner)
+	nullifierSecret := Hash2(api, api.Add(txBlinding, 1), circuit.Owner)
 	nullifier := HashWithAsset(api, nullifierSecret, circuit.TxAsset)
 
 	// this should match the spent tx from escrow
