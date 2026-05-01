@@ -7,9 +7,8 @@ libs = ["lib"]
 
 [rpc_endpoints]
 # 0G Newton Testnet (chain ID 16600)
-og_testnet = "${OG_TESTNET_RPC_URL}"
+og_testnet = "${RPC_URL}"
 
 [etherscan]
 # 0G testnet block explorer — used for contract verification
 og_testnet = { key = "${OG_ETHERSCAN_API_KEY}", url = "${OG_EXPLORER_URL}" }
-

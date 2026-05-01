@@ -149,7 +149,10 @@ contract Chamber is StoredMerkle, Ownable {
 		require(amount > 0, "amount must be positive");
 
 		// Transfer tokens from caller
-		IERC20(asset_).transferFrom(msg.sender, address(this), amount);
+		require(
+			IERC20(asset_).transferFrom(msg.sender, address(this), amount),
+			"transfer failed, check allowance and balance"
+		);
 
 		// Check no duplicate
 		require(assets[hash_].amount == 0, "transaction already exists");
@@ -293,7 +296,10 @@ contract Chamber is StoredMerkle, Ownable {
 		nullified[nullifier_] = true;
 
 		if (amount > 0) {
-			IERC20(asset_).transfer(recipient, amount);
+			require(
+				IERC20(asset_).transfer(recipient, amount),
+				"transfer failed, this shouldn't happen"
+			);
 		}
 	}
 
