@@ -4,24 +4,34 @@ export default {
   theme: {
     extend: {
       colors: {
-        'og-blue': '#3b82f6',
-        'og-dark': '#080810',
-        'og-card': '#0e0e1c',
-        'og-card2': '#13132a',
-        'og-border': '#1f1f42',
-        'og-border2': '#2a2a5a',
-        'mist-purple': '#7c3aed',
-        'mist-cyan': '#06b6d4',
-        'mist-green': '#10b981',
-        'mist-red': '#ef4444',
+        'mx-bg': '#000000',
+        'mx-soft': '#020a04',
+        'mx-green': '#00ff41',
+        'mx-dim': '#00b82e',
+        'mx-deep': '#005c17',
+        'mx-amber': '#ffb000',
+        'mx-red': '#ff2a2a',
+        'mx-white': '#e8ffe8',
       },
-      backgroundImage: {
-        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'mist-glow': 'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124,58,237,0.15), transparent)',
+      fontFamily: {
+        mono: ["'JetBrains Mono'", "'IBM Plex Mono'", "'Courier New'", 'monospace'],
       },
       animation: {
+        'blink': 'mx-blink 1s steps(2, start) infinite',
         'pulse-slow': 'pulse 3s cubic-bezier(0.4,0,0.6,1) infinite',
-        'spin-slow': 'spin 3s linear infinite',
+        'flicker': 'mx-flicker 6s linear infinite',
+      },
+      keyframes: {
+        'mx-blink': {
+          '0%, 49%': { opacity: '1' },
+          '50%, 100%': { opacity: '0' },
+        },
+        'mx-flicker': {
+          '0%, 96%, 100%': { opacity: '1' },
+          '97%': { opacity: '0.92' },
+          '98%': { opacity: '1' },
+          '99%': { opacity: '0.88' },
+        },
       },
     },
   },

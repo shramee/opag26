@@ -1,173 +1,106 @@
-import { useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { WalletButton } from './components/WalletButton'
-import { SwapForm } from './components/SwapForm'
-import { DepositForm } from './components/DepositForm'
-import { MistDashboard } from './components/MistDashboard'
+import { SwapCard } from './components/SwapCard'
 
-type Tab = 'swap' | 'deposit' | 'dashboard'
+const GLYPHS = 'ｦｧｨｩｪｫｬｭｮｯｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎ0123456789$€¥₿ETHBTCUSDC@#%&*+-=<>/\\|'
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'swap',      label: 'Swap',      icon: '⇄' },
-  { id: 'deposit',   label: 'Deposit',   icon: '🔒' },
-  { id: 'dashboard', label: 'Dashboard', icon: '◈' },
-]
+function MatrixRain() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
-const PROTOCOL_STATS = [
-  { label: 'TVL',          value: '$2.4M',    color: 'text-mist-green'  },
-  { label: 'Private Swaps',value: '14,832',   color: 'text-mist-purple' },
-  { label: 'LP Agents',    value: '47 online', color: 'text-mist-cyan'  },
-  { label: 'Anon Set',     value: '4,219',    color: 'text-gray-300'    },
-]
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')!
+    let raf: number
+    let w = 0, h = 0, drops: number[] = []
+    const fontSize = 14
 
-function MistLogo() {
+    function resize() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      w = canvas!.clientWidth
+      h = canvas!.clientHeight
+      canvas!.width = w * dpr
+      canvas!.height = h * dpr
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      const cols = Math.floor(w / fontSize)
+      drops = Array.from({ length: cols }, () => Math.random() * -50)
+    }
+    resize()
+    const ro = new ResizeObserver(resize)
+    ro.observe(canvas)
+
+    function draw() {
+      ctx.fillStyle = 'rgba(0,0,0,0.05)'
+      ctx.fillRect(0, 0, w, h)
+      ctx.font = `${fontSize}px 'JetBrains Mono', monospace`
+      for (let i = 0; i < drops.length; i++) {
+        const glyph = GLYPHS[Math.floor(Math.random() * GLYPHS.length)]
+        const x = i * fontSize
+        const y = drops[i] * fontSize
+        ctx.fillStyle = Math.random() > 0.975
+          ? 'rgba(220,255,220,0.55)'
+          : 'rgba(0,255,65,0.45)'
+        ctx.fillText(glyph, x, y)
+        if (y > h && Math.random() > 0.975) drops[i] = 0
+        drops[i] += 1
+      }
+      raf = requestAnimationFrame(draw)
+    }
+    draw()
+
+    return () => { cancelAnimationFrame(raf); ro.disconnect() }
+  }, [])
+
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="relative w-8 h-8">
-        <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-mist-purple to-mist-cyan opacity-90" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-white text-sm font-black">M</span>
-        </div>
-      </div>
-      <div>
-        <p className="text-sm font-bold tracking-tight leading-none text-white">MIST OTC</p>
-        <p className="text-xs text-gray-500 leading-none mt-0.5">Dark Pool · 0G</p>
-      </div>
-    </div>
+    <canvas
+      ref={canvasRef}
+      className="fixed inset-0 w-full h-full pointer-events-none"
+      style={{ mixBlendMode: 'screen', opacity: 0.35 }}
+    />
   )
-}
-
-function ProtocolStatsBar() {
-  return (
-    <div className="border-b border-og-border/40 bg-og-card/30 backdrop-blur-sm">
-      <div className="max-w-lg mx-auto px-5 py-1.5 flex items-center gap-6 overflow-x-auto scrollbar-thin">
-        {PROTOCOL_STATS.map(s => (
-          <div key={s.label} className="flex items-center gap-1.5 whitespace-nowrap">
-            <span className="text-xs text-gray-600">{s.label}</span>
-            <span className={`text-xs font-semibold ${s.color}`}>{s.value}</span>
-          </div>
-        ))}
-        <div className="ml-auto flex items-center gap-1.5 whitespace-nowrap">
-          <span className="w-1.5 h-1.5 rounded-full bg-mist-green animate-pulse-slow" />
-          <span className="text-xs text-gray-600">AXL live</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  return (
-    <div className="flex gap-1 bg-og-card2 border border-og-border rounded-xl p-1">
-      {TABS.map(t => (
-        <button
-          key={t.id}
-          onClick={() => onChange(t.id)}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all ${
-            active === t.id
-              ? 'bg-og-card text-white shadow-sm border border-og-border'
-              : 'text-gray-500 hover:text-gray-300'
-          }`}
-        >
-          <span className="text-base leading-none">{t.icon}</span>
-          {t.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function PoweredBy() {
-  return (
-    <div className="flex items-center justify-center gap-4 text-xs text-gray-700 pt-2">
-      <span className="flex items-center gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-mist-purple" />
-        MIST Privacy
-      </span>
-      <span className="flex items-center gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-mist-cyan" />
-        0G Testnet
-      </span>
-      <span className="flex items-center gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-og-blue" />
-        Gensyn AXL
-      </span>
-      <span className="flex items-center gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-mist-green" />
-        Poseidon2 ZK
-      </span>
-    </div>
-  )
-}
-
-const TAB_META: Record<Tab, { title: string; subtitle: string }> = {
-  swap: {
-    title: 'Private OTC Swap',
-    subtitle: 'Agent-negotiated, zero-MEV settlement via AXL',
-  },
-  deposit: {
-    title: 'Deposit into Chamber',
-    subtitle: 'Lock funds under a Poseidon2 commitment',
-  },
-  dashboard: {
-    title: 'MIST Dashboard',
-    subtitle: 'Your private notes and balances',
-  },
 }
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('swap')
-  const meta = TAB_META[tab]
-
   return (
-    <div className="min-h-screen bg-og-dark bg-mist-glow">
-      {/* Header */}
-      <header className="border-b border-og-border/60 px-5 py-3.5">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
-          <MistLogo />
-          <WalletButton />
-        </div>
-      </header>
+    <div className="min-h-screen bg-mx-bg overflow-x-hidden animate-flicker">
+      <MatrixRain />
 
-      {/* Protocol stats ticker */}
-      <ProtocolStatsBar />
+      {/* CRT scanlines */}
+      <div className="fixed inset-0 pointer-events-none z-50 crt-overlay" />
 
-      {/* Main */}
-      <main className="max-w-lg mx-auto px-4 py-6 space-y-4">
-        <TabBar active={tab} onChange={setTab} />
-
-        <div className="card glow-purple">
-          {/* Card header */}
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h2 className="font-semibold text-white">{meta.title}</h2>
-              <p className="text-xs text-gray-500 mt-0.5">{meta.subtitle}</p>
+      <div className="relative z-10">
+        <header className="border-b border-mx-green/20 px-5 py-4">
+          <div className="max-w-lg mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-mx-green font-mono font-bold text-xl tracking-widest">MIST OTC</span>
+              <a href='https://MIST.cash' className="text-mx-deep font-mono text-xs tracking-widest border-l border-mx-green/50 pl-3">
+                MIST.cash
+              </a>
             </div>
-            <div className="w-8 h-8 rounded-lg bg-mist-purple/10 border border-mist-purple/20
-                            flex items-center justify-center text-mist-purple text-sm">
-              {TABS.find(t => t.id === tab)?.icon}
-            </div>
+            <WalletButton btnClass='hidden' />
           </div>
+        </header>
 
-          {/* Tab content */}
-          {tab === 'swap'      && <SwapForm />}
-          {tab === 'deposit'   && <DepositForm />}
-          {tab === 'dashboard' && <MistDashboard />}
-        </div>
-
-        {/* Dark pool explainer */}
-        {tab === 'swap' && (
-          <div className="card-inner text-xs text-gray-500 space-y-1">
-            <p className="text-gray-400 font-medium">How the Dark Pool works</p>
-            <p>
-              Your swap intent is broadcast via Gensyn AXL p2p. LP agents bid privately on 0G Testnet,
-              locking their side into a MIST ZK escrow. You deposit your side into Chamber to complete
-              the atomic swap — no MEV exposure, no on-chain link between parties.
+        <main className="max-w-lg mx-auto px-4 py-8">
+          <div className="mb-5 font-mono space-y-0.5">
+            <p className="text-mx-green text-xs tracking-widest">
+              &gt; DARK POOL SWAP TERMINAL
+            </p>
+            <p className="text-mx-deep text-xs tracking-widest">
+              &gt; PAIR: DummyETH / DummyUSDC
             </p>
           </div>
-        )}
 
-        <PoweredBy />
-      </main>
+          <SwapCard />
+
+          <div className="mt-8 text-center text-xs text-mx-deep tracking-widest font-mono space-y-1">
+            <p>PRIVATE SETTLEMENT · MIST ESCROW · ZERO MEV</p>
+            <p className="text-mx-deep/40">
+              &gt; <span className="inline-block w-1.5 h-3 bg-mx-green animate-blink align-[-2px]" />
+            </p>
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

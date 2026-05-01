@@ -4,8 +4,8 @@ import { defineChain } from 'viem'
 
 // 0G Newton Testnet — https://build.0g.ai
 export const zeroGTestnet = defineChain({
-  id: 16601,
-  name: '0G Testnet Newton',
+  id: 16602,
+  name: '0G-Testnet-Galileo',
   nativeCurrency: { name: '0G', symbol: 'A0GI', decimals: 18 },
   rpcUrls: {
     default: { http: ['https://evmrpc-testnet.0g.ai'] },
