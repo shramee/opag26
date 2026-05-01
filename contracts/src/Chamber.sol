@@ -144,7 +144,11 @@ contract Chamber is StoredMerkle, Ownable {
 	/// @param hash_ The secret hash for the transaction.
 	/// @param amount The amount of tokens to deposit.
 	/// @param asset_ The ERC20 token address.
-	function deposit(uint256 hash_, uint256 amount, address asset_) external {
+	function deposit(
+		uint256 hash_,
+		uint256 amount,
+		address asset_
+	) external returns (uint256) {
 		require(amount < MAX_AMOUNT_SUPPORTED, "amount exceeds 4bn");
 		require(amount > 0, "amount must be positive");
 
@@ -161,6 +165,7 @@ contract Chamber is StoredMerkle, Ownable {
 		// Create tx hash with amount
 		uint256 txHash = hashWithAsset(hash_, asset_, amount);
 		_addNewTx(txHash);
+		return txHash;
 	}
 
 	/// @notice Withdraw without ZK proof (full withdrawal).
@@ -176,7 +181,7 @@ contract Chamber is StoredMerkle, Ownable {
 		address asset_,
 		uint256[] calldata proof
 	) external {
-		seekAndHideNoZk(claimingKey, owner_, amount, asset_, proof, 0, 0);
+		this.seekAndHideNoZk(claimingKey, owner_, amount, asset_, proof, 0, 0);
 	}
 
 	/// @notice Withdraw with option to re-wrap remaining funds in a new transaction.
@@ -195,7 +200,7 @@ contract Chamber is StoredMerkle, Ownable {
 		uint256[] calldata proof,
 		uint256 newTxSecret,
 		uint256 newTxAmount
-	) public {
+	) external {
 		// Locate transaction and get nullifier secret
 		uint256 nullifierSecret = _locateTransaction(
 			claimingKey,
