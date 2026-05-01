@@ -23,14 +23,14 @@ For the discussion below we will assume John is trying to put `100Eth` in escrow
 Private notes in MIST.cash contain recipient, token and amount along with a blinding vector.
 
 ```
-tx_secret = Hash( recipient, blinding )
+tx_secret = Hash( blinding, recipient )
 note = Hash( tx_secret, token, amount )
 ```
 
 The blinding vector can contain further details, an escrow note looks lik this
 
 ```
-escrow_blinding = Hash( expected_tx, blinding )
+escrow_blinding = Hash( blinding, expected_tx )
 tx_secret = Hash( ESCROW_CONTRACT, escrow_blinding )
 escrow_note = Hash( tx_secret, token, amount )
 ```
