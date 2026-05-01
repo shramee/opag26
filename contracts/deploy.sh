@@ -23,43 +23,33 @@ fi
 
 # ---- Validate required vars ------------------------------------------------
 : "${PRIVATE_KEY:?'PRIVATE_KEY is not set'}"
-: "${OG_TESTNET_RPC_URL:?'OG_TESTNET_RPC_URL is not set'}"
-
-# ---- Parse flags -----------------------------------------------------------
-BROADCAST=""
-VERIFY=""
-for arg in "$@"; do
-    case "$arg" in
-        --broadcast) BROADCAST="--broadcast" ;;
-        --verify)    VERIFY="--verify" ;;
-    esac
-done
-
-# ---- Build -----------------------------------------------------------------
-echo "Building contracts..."
-forge build
+: "${RPC_URL:?'RPC_URL is not set'}"
+: "${CHAIN_ID:?'CHAIN_ID is not set'}"
 
 # ---- Deploy ----------------------------------------------------------------
-CHAIN_ID=16600   # 0G Newton Testnet
+MODE="DRY-RUN (add --broadcast to deploy)"
+
+if [[ " $* " == *" --broadcast "* ]]; then
+    MODE="BROADCAST (live)"
+fi
 
 echo ""
 echo "=============================================="
 echo " Deploying Chamber to 0G Newton Testnet"
-echo " RPC : $OG_TESTNET_RPC_URL"
+echo " RPC : $RPC_URL"
 echo " Chain ID: $CHAIN_ID"
-[[ -n "$BROADCAST" ]] && echo " Mode: BROADCAST (live)" || echo " Mode: DRY-RUN (add --broadcast to deploy)"
+echo " Mode: $MODE"
 echo "=============================================="
 echo ""
 
 forge script script/DeployChamber.s.sol:DeployChamber \
-    --rpc-url "$OG_TESTNET_RPC_URL" \
+    --rpc-url "$RPC_URL" \
     --chain-id "$CHAIN_ID" \
-    $BROADCAST \
-    $VERIFY \
     --legacy \
-    -vvvv
+    -vvvv \
+    "$@"
 
-if [[ -n "$BROADCAST" ]]; then
+if [[ "$MODE" == "BROADCAST (live)" ]]; then
     echo ""
     echo "Deployment complete. Contract addresses are logged above."
     echo "Broadcast artifacts saved in: broadcast/DeployChamber.s.sol/$CHAIN_ID/"
