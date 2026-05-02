@@ -19,3 +19,19 @@ export function merkleProofForTx(transactions: bigint[], txHash: bigint, circuit
 }
 
 export { hash2, hash3, txHash, txSecret } from '@mistcash/sdk';
+
+/**
+ * Converts a character into hexadecimal character code
+ * @param {string} char
+ * @returns  {string} Hex representation of characters
+ */
+export const charCodeToHex = (char: string) => char.charCodeAt(0).toString(16).padStart(2, '0');
+
+/**
+ * Convert string to hexadecimal character code representation
+ * @param {string} str Input string
+ * @returns {Hex} Hexadecimal representation of the input string
+ */
+export function strToHex(str: string): Hex {
+	return `0x${Array.from(str).map(charCodeToHex).join('')}`;
+}
