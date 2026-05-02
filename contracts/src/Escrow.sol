@@ -117,6 +117,40 @@ contract Escrow {
 		emit EscrowConsumed(escrowNullifier);
 	}
 
+	/// @notice Deposits funds and withdraws escrow in the same transaction
+	///         (non-ZK version, for testing and simplicity).
+	/// @param expectedNote Struct containing the expected transaction details that unlock the escrow.
+	/// @param proof Groth16 proof that expected transaction exists.
+	/// @param input Public inputs from expected transaction exists proof circuit.
+	/// @param mistProof Groth16 proof for the Chamber transaction that spends the escrow note.
+	/// @param mistInput Public inputs for the Chamber transaction that spends the escrow note.
+	function depositAndConsumeEscrow(
+		// for deposit
+		Transaction calldata expectedNote,
+		// for consumeEscrow
+		uint256[8] calldata proof,
+		uint256[3] calldata input,
+		uint256[8] calldata mistProof,
+		uint256[10] calldata mistInput
+	) external {
+		IERC20 erc20 = IERC20(expectedNote.token);
+		// deposit to escrow
+		erc20.transferFrom(msg.sender, address(this), expectedNote.amount);
+		// escrow approve chamber to pull funds
+		erc20.approve(address(chamber), expectedNote.amount);
+		// make deposit to chamber
+		chamber.deposit(expectedNote.key, expectedNote.amount, expectedNote.token);
+
+		// now process withdrawing of the escrowed note as in consumeEscrowNoZk
+		this.consumeEscrowNoZk(
+			expectedTx,
+			expectedTxProof,
+			escrowNote,
+			escrowNoteProof,
+			recipient
+		);
+	}
+
 	/// @notice Releases an escrow without ZK proofs. The caller reveals `blinding`
 	///         and `expectedTx` on-chain (privacy is sacrificed).
 	///         Two merkle proofs are required:
