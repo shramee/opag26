@@ -35,14 +35,14 @@ fi
 
 echo ""
 echo "=============================================="
-echo " Deploying Chamber to 0G Newton Testnet"
+echo " Deploying Contracts"
 echo " RPC : $RPC_URL"
 echo " Chain ID: $CHAIN_ID"
 echo " Mode: $MODE"
 echo "=============================================="
 echo ""
 
-forge script script/DeployChamber.s.sol:DeployChamber \
+forge script script/DeployContracts.s.sol:DeployContracts \
     --rpc-url "$RPC_URL" \
     --chain-id "$CHAIN_ID" \
     --legacy \
@@ -52,5 +52,5 @@ forge script script/DeployChamber.s.sol:DeployChamber \
 if [[ "$MODE" == "BROADCAST (live)" ]]; then
     echo ""
     echo "Deployment complete. Contract addresses are logged above."
-    echo "Broadcast artifacts saved in: broadcast/DeployChamber.s.sol/$CHAIN_ID/"
+    echo "Broadcast artifacts saved in: broadcast/DeployContracts.s.sol/$CHAIN_ID/"
 fi

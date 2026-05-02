@@ -51,7 +51,9 @@ contract Chamber is StoredMerkle, Ownable {
 
 	event VerifierUpdated(address indexed verifier);
 
-	constructor(address owner_) Ownable(owner_) {}
+	constructor(address owner_, address verifier_) Ownable(owner_) {
+		verifier = ChamberVerifier(verifier_);
+	}
 
 	/// @notice Update the verifier contract used for ZK proof validation.
 	function setVerifier(address verifier_) external onlyOwner {
