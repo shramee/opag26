@@ -8,9 +8,27 @@ describe("proveEscrow", () => {
 		expect(result.status).toBe("success");
 	}, 30000);
 
-	it("generates a proof when MerkleRoot is omitted (auto-computed from MerkleProof)", async () => {
+	it("generates a proof without merkle", async () => {
 		const { MerkleRoot: _root, ...witness } = FIXTURES.WITNESS;
 		const result = await proveEscrow(witness);
 		expect(result.status).toBe("success");
 	}, 30000);
+
+	it("generates a proof without escrow nullifier", async () => {
+		const { EscrowNullifier: _null, ...witness } = FIXTURES.WITNESS;
+		const result = await proveEscrow(witness);
+		expect(result.status).toBe("success");
+	}, 30000);
+
+	it("generates a proof with partial recipient tx", async () => {
+		const { RecipientTx: _rTx, ...witness } = FIXTURES.WITNESS;
+		const result = await proveEscrow(witness);
+		expect(result.status).toBe("success");
+	}, 30000);
 });
+
+it("generates a proof w/o merkle, escrow nullifier, and recipient tx", async () => {
+	const { MerkleRoot: _root, EscrowNullifier: _null, RecipientTx: _rTx, ...witness } = FIXTURES.WITNESS;
+	const result = await proveEscrow(witness);
+	expect(result.status).toBe("success");
+}, 30000);

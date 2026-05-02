@@ -4,7 +4,7 @@ import './wasm_exec.js';
 import WITNESS_JSON from './assignment.json';
 import VK_JSON from './vk.json';
 import PROOF_JSON from './proof.json';
-import { initWasm, merkleRootFromPath, txHash, WasmExports } from '@mistcash/sdk';
+import { hash3, hash3Sync, hash_with_asset, initWasm, merkleRootFromPath, txHash, WasmExports } from '@mistcash/sdk';
 
 export type EscrowWasmExports = WasmExports & { proveEscrow: ProofFn }
 
@@ -18,10 +18,11 @@ const FIXTURES: {
 export { FIXTURES };
 
 export type WitnessStrict = typeof WITNESS_JSON;
-export type Witness = Omit<WitnessStrict, 'EscrowNullifier' | 'MerkleRoot'> & {
+export type Witness = Omit<WitnessStrict, 'EscrowNullifier' | 'MerkleRoot' | 'RecipientTx'> & {
 	// EscrowNullifier and MerkleRoot can be computed if not provided
 	EscrowNullifier?: WitnessStrict['EscrowNullifier'];
 	MerkleRoot?: WitnessStrict['MerkleRoot'];
+	RecipientTx?: WitnessStrict['RecipientTx'];
 };
 
 // Shared state management
@@ -88,8 +89,14 @@ export async function proveEscrow(witness: Witness): Promise<ProofResponse> {
 	const wasm = await init();
 
 	witness.EscrowNullifier = witness.EscrowNullifier ?? txHash(
-		(BigInt(witness.Blinding) + 1n).toString(),
+		(BigInt(hash3Sync(witness.Blinding, witness.SenderTx, witness.RecipientSecret)) + 1n).toString(),
 		witness.Owner,
+		witness.TxAsset.Addr,
+		witness.TxAsset.Amount,
+	).toString();
+
+	witness.RecipientTx = witness.RecipientTx ?? hash_with_asset(
+		witness.RecipientSecret,
 		witness.TxAsset.Addr,
 		witness.TxAsset.Amount,
 	).toString();
