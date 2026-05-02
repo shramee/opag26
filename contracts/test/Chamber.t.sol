@@ -38,14 +38,14 @@ contract ChamberTest is Test {
 
 	function setUp() public {
 		vm.startPrank(caller);
-		deployCodeTo("DummyERC20.sol", address(0x5544332211));
+		deployCodeTo("DummyERC20.sol:DummyERC20", address(0x5544332211));
 		erc20 = DummyERC20(address(0x5544332211));
 
 		// erc20 = new DummyERC20();
-		chamber = new Chamber(caller);
-		vm.stopPrank();
 		verifier = new MockChamberVerifier();
 		realVerifier = new ChamberVerifier();
+		chamber = new Chamber(caller, address(realVerifier));
+		vm.stopPrank();
 	}
 
 	// ========== Helper functions (mirrors Cairo test helpers) ==========

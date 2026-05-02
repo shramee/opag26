@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import { Chamber } from "../src/Chamber.sol";
+import { ChamberVerifier } from "../src/ChamberVerifier.sol";
 import { Escrow, Transaction } from "../src/Escrow.sol";
 import { DummyERC20 } from "../src/DummyERC20.sol";
 import { Poseidon2 as Hasher } from "../src/Poseidon.sol";
@@ -26,7 +27,9 @@ contract EscrowTest is Test {
 		tknA = new DummyERC20();
 		tknB = new DummyERC20();
 
-		chamber = new Chamber(admin);
+		ChamberVerifier chamberVerifier = new ChamberVerifier();
+		chamber = new Chamber(admin, address(chamberVerifier));
+
 		EscrowVerifier verifier = new EscrowVerifier();
 		escrow = new Escrow(address(chamber), address(verifier));
 
