@@ -25,12 +25,14 @@
 		"build": "tsup src/index.ts --format esm,cjs --dts --clean",
 		"dev": "tsup src/index.ts --format esm,cjs --dts --watch",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"sync-env": "node scripts/sync-env.mjs"
 	},
 	"devDependencies": {
 		"@types/node": "^25.6.0",
 		"tsup": "^8.5.0",
 		"typescript": "^5.8.3",
+		"viem": "^2.48.8",
 		"vitest": "^3.2.4"
 	},
 	"dependencies": {

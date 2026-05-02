@@ -72,7 +72,7 @@ export default function App() {
         <header className="border-b border-mx-green/20 px-5 py-4">
           <div className="max-w-lg mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-mx-green font-mono font-bold text-xl tracking-widest">MIST OTC</span>
+              <span className="text-mx-green font-mono font-bold text-xl tracking-widest">MIST_OTC</span>
               <a href='https://MIST.cash' className="text-mx-deep font-mono text-xs tracking-widest border-l border-mx-green/50 pl-3">
                 MIST.cash
               </a>
