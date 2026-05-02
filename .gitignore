@@ -4,3 +4,6 @@
 **/.env
 **/node_modules
 /sdk/dist
+/contracts/hardhat-artifacts
+/contracts/typechain-types
+/contracts/hardhat-cache

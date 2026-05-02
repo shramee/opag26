@@ -141,14 +141,8 @@ contract Escrow {
 		// make deposit to chamber
 		chamber.deposit(expectedNote.key, expectedNote.amount, expectedNote.token);
 
-		// now process withdrawing of the escrowed note as in consumeEscrowNoZk
-		this.consumeEscrowNoZk(
-			expectedTx,
-			expectedTxProof,
-			escrowNote,
-			escrowNoteProof,
-			recipient
-		);
+		// delegate to the ZK consume path
+		this.consumeEscrow(proof, input, mistProof, mistInput);
 	}
 
 	/// @notice Releases an escrow without ZK proofs. The caller reveals `blinding`
