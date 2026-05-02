@@ -94,7 +94,7 @@ export async function proveEscrow(witness: Witness): Promise<ProofResponse> {
 		witness.TxAsset.Amount,
 	).toString();
 
-	witness.MerkleRoot = witness.MerkleRoot ?? merkleRootFromPath(BigInt(witness.ExpectedTx), witness.MerkleProof.map((e: string) => BigInt(e))).toString();
+	witness.MerkleRoot = witness.MerkleRoot ?? merkleRootFromPath(BigInt(witness.SenderTx), witness.MerkleProof.map((e: string) => BigInt(e))).toString();
 
 	return await wasm.proveEscrow(JSON.stringify(witness));
 }

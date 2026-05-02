@@ -42,8 +42,8 @@ export const ESCROW_ABI = [
 		stateMutability: 'nonpayable',
 		inputs: [
 			{ name: 'expectedNote', ...TRANSACTION_TUPLE },
-			{ name: 'expectedTx', type: 'uint256' },
-			{ name: 'expectedTxProof', type: 'uint256[]' },
+			{ name: 'senderTx', type: 'uint256' },
+			{ name: 'senderTxProof', type: 'uint256[]' },
 			{ name: 'escrowNote', ...TRANSACTION_TUPLE },
 			{ name: 'escrowNoteProof', type: 'uint256[]' },
 			{ name: 'recipient', type: 'address' },
@@ -55,8 +55,8 @@ export const ESCROW_ABI = [
 		name: 'consumeEscrowNoZk',
 		stateMutability: 'nonpayable',
 		inputs: [
-			{ name: 'expectedTx', type: 'uint256' },
-			{ name: 'expectedTxProof', type: 'uint256[]' },
+			{ name: 'senderTx', type: 'uint256' },
+			{ name: 'senderTxProof', type: 'uint256[]' },
 			{ name: 'escrowNote', ...TRANSACTION_TUPLE },
 			{ name: 'escrowNoteProof', type: 'uint256[]' },
 			{ name: 'recipient', type: 'address' },
@@ -82,10 +82,10 @@ export interface EscrowTransaction {
 
 /**
  * Compute the escrow blinding factor.
- * = hash2(blinding, expectedTx)
+ * = hash2(blinding, senderTx)
  */
-export function escrowBlinding(blinding: bigint, expectedTx: bigint): bigint {
-	return BigInt(hash2Sync(blinding.toString(), expectedTx.toString()));
+export function escrowBlinding(blinding: bigint, senderTx: bigint): bigint {
+	return BigInt(hash2Sync(blinding.toString(), senderTx.toString()));
 }
 
 /**
@@ -94,8 +94,8 @@ export function escrowBlinding(blinding: bigint, expectedTx: bigint): bigint {
  *
  * Pass this as `hash_` to chamber.deposit().
  */
-export function escrowDepositKey(blinding: bigint, expectedTx: bigint, escrowAddr: string): bigint {
-	const eb = escrowBlinding(blinding, expectedTx);
+export function escrowDepositKey(blinding: bigint, senderTx: bigint, escrowAddr: string): bigint {
+	const eb = escrowBlinding(blinding, senderTx);
 	return BigInt(hash2Sync(eb.toString(), evmAddrToField(escrowAddr).toString()));
 }
 
@@ -105,12 +105,12 @@ export function escrowDepositKey(blinding: bigint, expectedTx: bigint, escrowAdd
  */
 export function escrowTxHash(
 	blinding: bigint,
-	expectedTx: bigint,
+	senderTx: bigint,
 	escrowAddr: string,
 	tokenAddr: string,
 	amount: bigint,
 ): bigint {
-	const depositKey = escrowDepositKey(blinding, expectedTx, escrowAddr);
+	const depositKey = escrowDepositKey(blinding, senderTx, escrowAddr);
 	return BigInt(hash3Sync(
 		depositKey.toString(),
 		evmAddrToField(tokenAddr).toString(),
@@ -120,10 +120,10 @@ export function escrowTxHash(
 
 /**
  * The claiming key passed as escrowNote.key to consumeEscrowNoZk.
- * = hash2(blinding, expectedTx)  (same as escrowBlinding)
+ * = hash2(blinding, senderTx)  (same as escrowBlinding)
  */
-export function escrowClaimingKey(blinding: bigint, expectedTx: bigint): bigint {
-	return escrowBlinding(blinding, expectedTx);
+export function escrowClaimingKey(blinding: bigint, senderTx: bigint): bigint {
+	return escrowBlinding(blinding, senderTx);
 }
 
 /**
@@ -132,12 +132,12 @@ export function escrowClaimingKey(blinding: bigint, expectedTx: bigint): bigint 
  */
 export function escrowNullifier(
 	blinding: bigint,
-	expectedTx: bigint,
+	senderTx: bigint,
 	escrowAddr: string,
 	tokenAddr: string,
 	amount: bigint,
 ): bigint {
-	const eb = escrowBlinding(blinding, expectedTx);
+	const eb = escrowBlinding(blinding, senderTx);
 	const nullifierSecret = BigInt(hash2Sync(
 		(eb + 1n).toString(),
 		evmAddrToField(escrowAddr).toString(),
