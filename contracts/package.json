@@ -12,5 +12,8 @@
     "hardhat": "^2.22.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.8.0"
+  },
+  "dependencies": {
+    "@opag26/sdk": "link:../sdk"
   }
 }

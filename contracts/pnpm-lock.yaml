@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@opag26/sdk':
+        specifier: link:../sdk
+        version: link:../sdk
     devDependencies:
       '@nomicfoundation/hardhat-toolbox':
         specifier: ^5.0.0
