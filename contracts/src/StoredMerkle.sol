@@ -121,11 +121,7 @@ contract StoredMerkle {
 			if (index % 2 != 0) {
 				// odd index => pair with previous leaf
 				uint256 pairedNode = readLeaf(level, index - 1);
-				if (node < pairedNode) {
-					node = Hasher.hash2(node, pairedNode);
-				} else {
-					node = Hasher.hash2(pairedNode, node);
-				}
+				node = _merkleHash(node, pairedNode);
 			} else {
 				// even index => no sibling yet, carry the node upward unchanged
 			}
@@ -179,11 +175,7 @@ contract StoredMerkle {
 	) public pure returns (uint256) {
 		uint256 current = leaf;
 		for (uint256 i = 0; i < proof.length; i++) {
-			if (current < proof[i]) {
-				current = Hasher.hash2(current, proof[i]);
-			} else {
-				current = Hasher.hash2(proof[i], current);
-			}
+			current = _merkleHash(current, proof[i]);
 		}
 		return current;
 	}
@@ -209,16 +201,34 @@ contract StoredMerkle {
 		for (uint256 i = 0; i + 1 < len; i += 2) {
 			uint256 left = nodes[i];
 			uint256 right = nodes[i + 1];
-			if (left < right) {
-				nextLevel[nextIndex] = Hasher.hash2(left, right);
-			} else {
-				nextLevel[nextIndex] = Hasher.hash2(right, left);
-			}
+			nextLevel[nextIndex] = _merkleHash(left, right);
 			nextIndex++;
 		}
 
 		if (len % 2 != 0) {
 			nextLevel[nextIndex] = nodes[len - 1];
+		}
+	}
+
+	function _merkleHashNot0(
+		uint256 left,
+		uint256 right
+	) internal pure returns (uint256) {
+		if (left == 0) {
+			return right;
+		} else {
+			return Hasher.hash2(left, right);
+		}
+	}
+
+	function _merkleHash(
+		uint256 left,
+		uint256 right
+	) internal pure returns (uint256) {
+		if (left < right) {
+			return _merkleHashNot0(left, right);
+		} else {
+			return _merkleHashNot0(right, left);
 		}
 	}
 }
