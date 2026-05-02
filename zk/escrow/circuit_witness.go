@@ -48,11 +48,11 @@ var escrowTxAsset = AsAsset(0xf00, 4)
 var EscrowCircuitWitness = EscrowCircuit{
 	// circuit doesn't check is escrow tx exists
 	// so just use dummy values
-	Blinding: 1,
-	Owner:    0xb0b,
+	Blinding: "1",
+	Owner:    "0xb0b",
 	TxAsset:  escrowTxAsset,
 
-	RecipientSecret: 0xdeadbeef,
+	RecipientSecret: "0xdeadbeef",
 	RecipientTx: NativeHash3(
 		NativeFr(recipientSecret),
 		NativeFrInt(0xf00),

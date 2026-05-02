@@ -26,7 +26,7 @@ type EscrowCircuit struct {
 	Blinding        Variable
 	RecipientSecret Variable
 	// This will be the escrow contract
-	Owner Variable `gnark:",public"`
+	Owner Variable
 	// assets in escrow
 	TxAsset Asset
 
