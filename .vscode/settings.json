@@ -1,4 +1,15 @@
 {
+  "solidity.enabledAsYouTypeCompilationErrorCheck": false,
+  "solidity.packageDefaultDependenciesContractsDirectory": "src",
+  "solidity.packageDefaultDependenciesDirectory": [
+    "contracts/lib",
+    "node_modules",
+    "lib"
+  ],
+  "solidity.remappings": [
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "forge-std/=lib/forge-std/src/"
+  ],
   "[solidity]": {
     "editor.defaultFormatter": "JuanBlanco.solidity",
     "editor.formatOnSave": true,

@@ -7,6 +7,7 @@ import { Escrow, Transaction } from "../src/Escrow.sol";
 import { DummyERC20 } from "../src/DummyERC20.sol";
 import { Poseidon2 as Hasher } from "../src/Poseidon.sol";
 import { console } from "forge-std/console.sol";
+import { EscrowVerifier } from "../src/EscrowVerifier.sol";
 
 contract EscrowTest is Test {
 	Chamber chamber;
@@ -26,7 +27,8 @@ contract EscrowTest is Test {
 		tknB = new DummyERC20();
 
 		chamber = new Chamber(admin);
-		escrow = new Escrow(address(chamber));
+		EscrowVerifier verifier = new EscrowVerifier();
+		escrow = new Escrow(address(chamber), address(verifier));
 
 		// recip has tknA, wants tknB, sender has tknB
 		tknA.transfer(recip, 100_000);
