@@ -6,7 +6,7 @@ export interface Asset {
 	addr: string;
 }
 
-export type ProofFn = (witness: Witness) => Promise<ProofResponse>;
+export type ProofFn = (witness: string) => Promise<ProofResponse>;
 
 /**
  * WASM instance with Go runtime

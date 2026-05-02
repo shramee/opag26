@@ -18,7 +18,7 @@ const FIXTURES: {
 export { FIXTURES };
 
 export type WitnessStrict = typeof WITNESS_JSON;
-export type Witness = Omit<WitnessStrict, 'EscrowNullifier'> & {
+export type Witness = Omit<WitnessStrict, 'EscrowNullifier' | 'MerkleRoot'> & {
 	// EscrowNullifier and MerkleRoot can be computed if not provided
 	EscrowNullifier?: WitnessStrict['EscrowNullifier'];
 	MerkleRoot?: WitnessStrict['MerkleRoot'];
@@ -80,7 +80,7 @@ export async function init(): Promise<EscrowWasmExports> {
  * @returns Proof response
  */
 export async function proveEscrow(witness: Witness): Promise<ProofResponse> {
-	let proveEscrow = await init();
+	const wasm = await init();
 
 	witness.EscrowNullifier = witness.EscrowNullifier ?? txHash(
 		(BigInt(witness.Blinding) + 1n).toString(),
@@ -91,5 +91,5 @@ export async function proveEscrow(witness: Witness): Promise<ProofResponse> {
 
 	witness.MerkleRoot = witness.MerkleRoot ?? merkleRootFromPath(BigInt(witness.ExpectedTx), witness.MerkleProof.map((e: string) => BigInt(e))).toString();
 
-	return await proveEscrow(JSON.stringify(witness));
+	return await wasm.proveEscrow(JSON.stringify(witness));
 }
