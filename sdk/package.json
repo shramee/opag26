@@ -17,7 +17,7 @@
 	"files": [
 		"dist"
 	],
-	"sideEffects": false,
+	"sideEffects": true,
 	"engines": {
 		"node": ">=18"
 	},

@@ -1,3 +1,4 @@
+export * from './utils';
 export * from './gnark';
 export * from './contracts/chamber';
 export * from './contracts/escrow';

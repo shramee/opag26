@@ -8,7 +8,7 @@ import type { Proof, ProofResponse, SuccessResponse } from './gnark/types';
  *
  * Note: G2 Fp2 coefficients are stored A1-first (big-endian) per EIP-197 convention.
  */
-export function proofToContractArgs(proof: Proof): readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint] {
+export function proofToContractArgs(proof: Proof): bigint[] {
 	return [
 		BigInt(proof.Ar.X),
 		BigInt(proof.Ar.Y),
@@ -18,7 +18,7 @@ export function proofToContractArgs(proof: Proof): readonly [bigint, bigint, big
 		BigInt(proof.Bs.Y.A0),
 		BigInt(proof.Krs.X),
 		BigInt(proof.Krs.Y),
-	] as const;
+	];
 }
 
 /** Convert publicInputs from ProofResponse to bigint[]. */
@@ -33,7 +33,7 @@ export function publicInputsToBigInt(publicInputs: (string | number)[]): bigint[
  * Throws if the response is an error.
  */
 export function extractProofArgs(response: ProofResponse): {
-	proof: readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+	proof: bigint[];
 	publicInputs: bigint[];
 } {
 	if (response.status === 'error') {

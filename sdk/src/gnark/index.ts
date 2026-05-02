@@ -71,7 +71,12 @@ export async function getWasmInstance(): Promise<WasmInstance> {
  */
 export async function init(): Promise<EscrowWasmExports> {
 	const mistWasm = await initWasm(); // Ensure any necessary setup is done before accessing exports
-	return { ...mistWasm, proveEscrow: (await getWasmInstance()).exports };
+	const proveBkp = (globalThis as any).prove;
+
+	const proveEscrow = (await getWasmInstance()).exports;
+
+	(globalThis as any).prove = proveBkp
+	return { ...mistWasm, proveEscrow };
 }
 
 /**
