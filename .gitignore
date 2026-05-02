@@ -3,3 +3,4 @@
 /contracts/.env
 **/.env
 **/node_modules
+/sdk/dist
