@@ -5,8 +5,8 @@ import (
 )
 
 // Sender locks some funds in private tx with escrow as owner,
-// with expect TX that should exist for him.
-// escrowTx = h3(h2(h2(blinding, expected_tx), escrow_contract), token, amount)
+// with expect TX that should exist for him and recipients secret.
+// escrowTx = h3(h2(h3(blinding, expected_tx, recipient_secret), escrow_contract), token, amount)
 //
 // Then shares all the details with recipient,
 // blinding, expected_tx, escrow_contract, token, amount
@@ -23,8 +23,8 @@ import (
 
 type EscrowCircuit struct {
 	// escrow blinding vector
-	Blinding Variable
-
+	Blinding        Variable
+	RecipientSecret Variable
 	// This will be the escrow contract
 	Owner Variable `gnark:",public"`
 	// assets in escrow
@@ -34,8 +34,11 @@ type EscrowCircuit struct {
 	// binds expected tx to escrowed transaction
 	EscrowNullifier Variable `gnark:",public"` // This should match the nullifier of tx to spend
 
+	RecipientTx Variable `gnark:",public"` // This should match the nullifier of tx to spend
+
 	// expected transaction should be in the merkle root
-	ExpectedTx  Variable
+	SenderTx Variable
+
 	MerkleProof [20]Variable
 	MerkleRoot  Variable `gnark:",public"`
 }
@@ -43,16 +46,21 @@ type EscrowCircuit struct {
 func (circuit *EscrowCircuit) Define(api frontend.API) error {
 
 	// Verify expected transacion exists in merkle root
-	CheckMerkleRoot(api, circuit.ExpectedTx, circuit.MerkleProof, circuit.MerkleRoot)
+	CheckMerkleRoot(api, circuit.SenderTx, circuit.MerkleProof, circuit.MerkleRoot)
 
-	// check escrow transaction nullifier
-	txBlinding := Hash2(api, circuit.Blinding, circuit.ExpectedTx)
+	// check escrow transaction nullifier, binds recipients tx and senders tx
+	txBlinding := Hash3(api, circuit.Blinding, circuit.SenderTx, circuit.RecipientSecret)
 
 	nullifierSecret := Hash2(api, api.Add(txBlinding, 1), circuit.Owner)
 	nullifier := HashWithAsset(api, nullifierSecret, circuit.TxAsset)
 
-	// this should match the spent tx from escrow
+	// this tx should be spent
 	api.AssertIsEqual(circuit.EscrowNullifier, nullifier)
+
+	// recipients tx should be created, same assets, but for the recipient
+	recipientTx := HashWithAsset(api, circuit.RecipientSecret, circuit.TxAsset)
+
+	api.AssertIsEqual(circuit.RecipientTx, recipientTx)
 
 	return nil
 }

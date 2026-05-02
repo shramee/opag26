@@ -26,7 +26,7 @@ var AllTransactionHashes = []string{
 }
 
 // The tx escrow expects
-var expected_tx = "0x1291646ac1ba37e246d84fde6ff41f784fc3d90da73091e0818a6e6a84bc1474"
+var senders_tx = "0x1291646ac1ba37e246d84fde6ff41f784fc3d90da73091e0818a6e6a84bc1474"
 var proof = [20]frontend.Variable{
 	"0x2cf31da613176ebbb3cf535bf414f28176bd29f1ea264db339391b66d555989c",
 	"0x2f2c4d50de48b60a8188793052bbc92f2a381d066ff0d0fe1aee993f30fdb75c",
@@ -37,7 +37,9 @@ var proof = [20]frontend.Variable{
 }
 var root = "0x1935947da594b4bc039293afa3a32bd696b5896bca7a427fc2162a7d50ae860b"
 
-var escrowTxBlinding = NativeHash2(NativeFrInt(1), NativeFr(expected_tx))
+var recipientSecret = "0xdeadbeef"
+
+var escrowTxBlinding = NativeHash3(NativeFrInt(1), NativeFr(senders_tx), NativeFr(recipientSecret))
 var escrowNullifierSecret = new(frbn254.Element)
 var _ = escrowNullifierSecret.Add(escrowTxBlinding, NativeFrInt(1))
 
@@ -49,15 +51,20 @@ var EscrowCircuitWitness = EscrowCircuit{
 	Blinding: 1,
 	Owner:    0xb0b,
 	TxAsset:  escrowTxAsset,
-	// Escrow transaction nullifier for binding
+
+	RecipientSecret: 0xdeadbeef,
+	RecipientTx: NativeHash3(
+		NativeFr(recipientSecret),
+		NativeFrInt(0xf00),
+		NativeFrInt(4),
+	),
 	EscrowNullifier: NativeHash3(
 		NativeHash2(escrowNullifierSecret, NativeFrInt(0xb0b)),
 		NativeFrInt(0xf00),
 		NativeFrInt(4),
 	),
-
 	// membership proof of expected tx
-	ExpectedTx:  expected_tx,
+	SenderTx:    senders_tx,
 	MerkleProof: proof,
 	MerkleRoot:  root,
 }
