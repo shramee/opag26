@@ -4,4 +4,4 @@
 
 * [contracts](contracts)
 * [frontend](frontend)
-* [frontend](frontend)
+* [sdk](sdk)
