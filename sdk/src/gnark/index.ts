@@ -4,10 +4,12 @@ import './wasm_exec.js';
 import WITNESS_JSON from './assignment.json';
 import VK_JSON from './vk.json';
 import PROOF_JSON from './proof.json';
-import { initWasm, txHash } from '@mistcash/sdk';
+import { initWasm, merkleRootFromPath, txHash, WasmExports } from '@mistcash/sdk';
+
+export type EscrowWasmExports = WasmExports & { proveEscrow: ProofFn }
 
 const FIXTURES: {
-	WITNESS: Witness, VK: typeof VK_JSON, PROOF: typeof PROOF_JSON
+	WITNESS: WitnessStrict, VK: typeof VK_JSON, PROOF: typeof PROOF_JSON
 } = {
 	WITNESS: WITNESS_JSON,
 	VK: VK_JSON,
@@ -15,7 +17,12 @@ const FIXTURES: {
 };
 export { FIXTURES };
 
-export type Witness = typeof WITNESS_JSON;
+export type WitnessStrict = typeof WITNESS_JSON;
+export type Witness = Omit<WitnessStrict, 'EscrowNullifier'> & {
+	// EscrowNullifier and MerkleRoot can be computed if not provided
+	EscrowNullifier?: WitnessStrict['EscrowNullifier'];
+	MerkleRoot?: WitnessStrict['MerkleRoot'];
+};
 
 // Shared state management
 let wasmInstance: WasmInstance | null = null;
@@ -62,9 +69,9 @@ export async function getWasmInstance(): Promise<WasmInstance> {
 /**
  * Initializes the WASM module in Node.js environment
  */
-export async function init(): Promise<ProofFn> {
-	await initWasm(); // Ensure any necessary setup is done before accessing exports
-	return (await getWasmInstance()).exports;
+export async function init(): Promise<EscrowWasmExports> {
+	const mistWasm = await initWasm(); // Ensure any necessary setup is done before accessing exports
+	return { ...mistWasm, proveEscrow: (await getWasmInstance()).exports };
 }
 
 /**
@@ -72,15 +79,17 @@ export async function init(): Promise<ProofFn> {
  * @param witness Proof generation witness
  * @returns Proof response
  */
-export async function proveEscrow(witness: Partial<Witness>): Promise<ProofResponse> {
+export async function proveEscrow(witness: Witness): Promise<ProofResponse> {
 	let proveEscrow = await init();
 
-	witness.EscrowNullifier = txHash(
+	witness.EscrowNullifier = witness.EscrowNullifier ?? txHash(
 		(BigInt(witness.Blinding) + 1n).toString(),
 		witness.Owner,
 		witness.TxAsset.Addr,
 		witness.TxAsset.Amount,
 	).toString();
+
+	witness.MerkleRoot = witness.MerkleRoot ?? merkleRootFromPath(BigInt(witness.ExpectedTx), witness.MerkleProof.map((e: string) => BigInt(e))).toString();
 
 	return await proveEscrow(JSON.stringify(witness));
 }
