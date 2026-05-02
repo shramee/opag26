@@ -2,6 +2,8 @@
 
 Reusable TypeScript utilities packaged for Node.js, browser, and React applications.
 
+The SDK targets the current recipient-bound escrow flow: escrow proofs tie the sender's expected payment transaction to a recipient secret, preventing claim sniping while allowing the payment and escrow claim to remain separate private actions.
+
 ## @TODO
 
 1. Add typed access to contract reads and view functions from [Chamber contract](../contracts/src/Chamber.sol).
