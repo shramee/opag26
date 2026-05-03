@@ -4,11 +4,11 @@ Vercel AI SDK based agent runner for MIST private OTC swaps.
 
 Each agent is a directory with three files:
 
-| File         | Required | Purpose                                                                            |
-| ------------ | -------- | ---------------------------------------------------------------------------------- |
-| `README.md`  | yes      | The agent's persona and behavior — used verbatim as the LLM system prompt.         |
-| `task.md`    | no       | Optional initial user message; if present, the agent kicks off the conversation.   |
-| `.env`       | yes      | Wallet, RPC, chain, contract/token addresses, peer URL, Anthropic key.             |
+| File        | Required | Purpose                                                                          |
+| ----------- | -------- | -------------------------------------------------------------------------------- |
+| `README.md` | yes      | The agent's persona and behavior — used verbatim as the LLM system prompt.       |
+| `task.md`   | no       | Optional initial user message; if present, the agent kicks off the conversation. |
+| `.env`      | yes      | Wallet, RPC, chain, contract/token addresses, peer URL, inference API key.       |
 
 The runner reads those files, instantiates a `MISTActions` with the private key as master key (and a viem-based ChainAdapter that signs with the same key), starts an HTTP server, and lets the LLM drive the swap via tools.
 
@@ -23,24 +23,24 @@ ESCROW_ADDRESS=0x...
 TOKENS=dumETH:0x...,dumUSD:0x...
 PEER_URL=http://127.0.0.1:3101
 PORT=3100
-ANTHROPIC_API_KEY=sk-ant-...
-MODEL=claude-sonnet-4-5    # optional, default claude-sonnet-4-5
+INFERENCE_API_KEY=sk-...
+MODEL=zai-org/GLM-5-FP8    # optional, default zai-org/GLM-5-FP8
 MAX_STEPS=12               # optional, max LLM tool steps per turn
 VERBOSE=true               # optional, log thoughts and tool calls
 ```
 
 ## Tools exposed to the LLM
 
-| Tool                 | Purpose                                                                        |
-| -------------------- | ------------------------------------------------------------------------------ |
-| `requestPayment`     | Create a private MIST request (`MISTActions.requestFunds`).                    |
-| `payRequest`         | Direct deposit to a known request (`MISTActions.deposit`).                     |
-| `escrowFund`         | Creator side of the escrow protocol (`MISTActions.escrowFund`).                |
-| `escrowClaim`        | Recipient side of the escrow protocol (`MISTActions.escrowClaim`).             |
-| `checkRequestStatus` | PENDING / PAID / WITHDRAWN status for a request.                               |
-| `showBalance`        | Sum of paid/withdrawn/pending MIST request amounts plus on-chain ERC-20 bal.   |
-| `sendPeer`           | POST a message (and optionally shared requests + blinding) to the peer agent.  |
-| `finalize`           | Mark conversation done — agent stops processing further turns.                 |
+| Tool                 | Purpose                                                                       |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `requestPayment`     | Create a private MIST request (`MISTActions.requestFunds`).                   |
+| `payRequest`         | Direct deposit to a known request (`MISTActions.deposit`).                    |
+| `escrowFund`         | Creator side of the escrow protocol (`MISTActions.escrowFund`).               |
+| `escrowClaim`        | Recipient side of the escrow protocol (`MISTActions.escrowClaim`).            |
+| `checkRequestStatus` | PENDING / PAID / WITHDRAWN status for a request.                              |
+| `showBalance`        | Sum of paid/withdrawn/pending MIST request amounts plus on-chain ERC-20 bal.  |
+| `sendPeer`           | POST a message (and optionally shared requests + blinding) to the peer agent. |
+| `finalize`           | Mark conversation done — agent stops processing further turns.                |
 
 ## Running
 

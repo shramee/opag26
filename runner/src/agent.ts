@@ -1,4 +1,4 @@
-import { createAnthropic } from '@ai-sdk/anthropic';
+import { createOpenAI } from '@ai-sdk/openai';
 import { generateText, type CoreMessage } from 'ai';
 import { MISTActions, MISTTx, type Hex } from './sdk.ts';
 
@@ -97,8 +97,8 @@ export class Agent {
 
 			const attachmentNote = attachedRequests.length
 				? `\n\n[peer attached requests: ${attachedRequests
-						.map((r) => `${r.alias} (${r.tokenSymbol ?? r.token}, ${r.amount})`)
-						.join('; ')}]`
+					.map((r) => `${r.alias} (${r.tokenSymbol ?? r.token}, ${r.amount})`)
+					.join('; ')}]`
 				: '';
 
 			this.messages.push({ role: 'user', content: userMessage + attachmentNote });
@@ -113,7 +113,10 @@ export class Agent {
 	private async step(): Promise<void> {
 		if (this.finalized) return;
 
-		const provider = createAnthropic({ apiKey: this.config.env.anthropicApiKey });
+		const provider = createOpenAI({
+			apiKey: this.config.env.inferenceApiKey,
+			baseURL: 'https://compute-network-1.integratenetwork.work/v1/proxy',
+		});
 		const tools = buildTools(this);
 		const verbose = this.config.env.verbose;
 
@@ -125,11 +128,11 @@ export class Agent {
 			maxSteps: this.config.env.maxStepsPerTurn,
 			onStepFinish: verbose
 				? (step) => {
-						if (step.text) console.log(`[${this.config.name}] thought: ${step.text}`);
-						for (const call of step.toolCalls) {
-							console.log(`[${this.config.name}] → ${call.toolName}(${JSON.stringify(call.args)})`);
-						}
+					if (step.text) console.log(`[${this.config.name}] thought: ${step.text}`);
+					for (const call of step.toolCalls) {
+						console.log(`[${this.config.name}] → ${call.toolName}(${JSON.stringify(call.args)})`);
 					}
+				}
 				: undefined,
 		});
 

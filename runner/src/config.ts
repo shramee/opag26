@@ -20,7 +20,7 @@ export interface AgentEnv {
 	tokens: Record<string, Hex>;
 	peerUrl: string;
 	listenPort: number;
-	anthropicApiKey: string;
+	inferenceApiKey: string;
 	model: string;
 	maxStepsPerTurn: number;
 	verbose: boolean;
@@ -92,8 +92,8 @@ export function loadAgentConfig(agentDir: string): AgentConfig {
 			tokens: parseTokens(env.TOKENS),
 			peerUrl: requireEnv(env, 'PEER_URL'),
 			listenPort: parsePort(env.PORT, 3000),
-			anthropicApiKey: requireEnv(env, 'ANTHROPIC_API_KEY'),
-			model: env.MODEL || 'claude-sonnet-4-5',
+			inferenceApiKey: requireEnv(env, 'INFERENCE_API_KEY'),
+			model: env.MODEL || 'zai-org/GLM-5-FP8',
 			maxStepsPerTurn: Number(env.MAX_STEPS || '12'),
 			verbose: (env.VERBOSE || 'true').toLowerCase() !== 'false',
 		},
