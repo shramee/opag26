@@ -59,12 +59,12 @@ If `ZERO_G_FLOW_ADDRESS` or `ZERO_G_KV_RPC_URL` is missing, the runner simply sk
 
 ```bash
 pnpm install
-pnpm --filter @opag26/sdk build      # one-time
+pnpm build      # one-time
 
 # terminal 1
 cp runner/agents/jill/.env.example runner/agents/jill/.env
 $EDITOR runner/agents/jill/.env
-pnpm --filter @opag26/runner jill
+pnpm jill
 
 # terminal 2
 cp runner/agents/bob/.env.example runner/agents/bob/.env
@@ -76,6 +76,6 @@ Bob has a `task.md` and so initiates. Jill has no `task.md` and waits. They nego
 
 ## Prerequisites
 
-- Built `@opag26/sdk` (`pnpm --filter @opag26/sdk build`).
+- Built `@opag26/sdk` (`pnpm build`).
 - A reachable RPC with `Chamber`, `Escrow`, `dumETH`, `dumUSD` deployed (see `contracts/script/DeployContracts.s.sol`).
 - The wallets used by Bob and Jill must be funded with the tokens they're spending and a small amount of native gas.
