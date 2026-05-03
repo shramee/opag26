@@ -1,4 +1,4 @@
-import { calculateMerkleRootAndProof, prove_groth16, Witness } from '@mistcash/sdk';
+import { calculateMerkleRootAndProof, hash2Sync, prove_groth16, Witness } from '@mistcash/sdk';
 
 export function proveMist(witness: Witness) {
 	witness.AuthDone = witness.AuthDone || "0";
@@ -34,4 +34,20 @@ export const charCodeToHex = (char: string) => char.charCodeAt(0).toString(16).p
  */
 export function strToHex(str: string): Hex {
 	return `0x${Array.from(str).map(charCodeToHex).join('')}`;
+}
+
+export type Hex = `0x${string}`;
+
+function h2hex(a: string, b: string): Hex {
+	return `0x${BigInt(hash2Sync(a, b)).toString(16)}`;
+}
+
+/** Convert a human-readable USDC amount like "10.00" → 10_000_000n */
+export function toTokenUnits(amount: string, decimals = 6): bigint {
+	return BigInt(Math.round(parseFloat(amount) * 10 ** decimals));
+}
+
+/** Inverse of toTokenUnits — for display */
+export function fromTokenUnits(raw: bigint, decimals = 6): string {
+	return (Number(raw) / 10 ** decimals).toFixed(2);
 }
