@@ -139,10 +139,6 @@ describe("Escrow", function () {
     const { admin, bob, bobAddr, tknA, tknB, mistAdmin, mistBob } = await setup();
     await tknA.transfer(bobAddr, 100_000n);
 
-    console.log("Bob A:", await tknA.balanceOf(bob.address), "Bob B:", await tknB.balanceOf(bob.address));
-    console.log("Bob A:", await tknA.balanceOf(admin.address), "Admin B:", await tknB.balanceOf(admin.address));
-
-
     // bob wants to swap 100A for 5B in escrow with admin
 
     // bob request for 5B
@@ -153,6 +149,13 @@ describe("Escrow", function () {
 
     // parties share BLINDING, adminRequest and recipientsRequest
 
+    // now admin makes escrow tx
+    await mistAdmin.escrowFund(adminRequest, recipientsRequest, BLINDING);
 
+    // now bob claims escrow
+    await mistBob.escrowClaim(adminRequest, recipientsRequest, BLINDING);
+
+    // bob's recipient request should now be paid
+    expect(await mistAdmin.checkStatus(recipientsRequest)).to.equal("PAID");
   });
 });
