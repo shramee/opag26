@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { Hex } from './sdk.ts';
@@ -14,6 +15,10 @@ function toHex(value: string): Hex {
 	return hex as Hex;
 }
 
+function generateBlindingValue(): Hex {
+	return `0x${randomBytes(32).toString('hex')}`;
+}
+
 function describeToolError(error: unknown): { message: string; details?: string } {
 	if (error instanceof Error) {
 		const details = (error as Error & { details?: string }).details;
@@ -24,6 +29,16 @@ function describeToolError(error: unknown): { message: string; details?: string 
 
 export function buildTools(agent: Agent) {
 	return {
+		generateBlinding: tool({
+			description:
+				'Generate a fresh BLINDING hex value in JavaScript. Call this instead of inventing a BLINDING string in chat, then reuse the returned value exactly in sendPeer/escrowFund/escrowClaim.',
+			parameters: z.object({}),
+			execute: async () => {
+				const blinding = generateBlindingValue();
+				return { blinding };
+			},
+		}),
+
 		requestPayment: tool({
 			description:
 				'Create a private MIST payment request that the peer can fulfill. ' +
