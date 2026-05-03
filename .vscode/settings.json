@@ -15,5 +15,8 @@
     "editor.formatOnSave": true,
     "editor.insertSpaces": false,
     "editor.tabSize": 2
+  },
+  "chat.tools.terminal.autoApprove": {
+    "pnpm": true
   }
 }

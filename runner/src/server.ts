@@ -40,12 +40,24 @@ export function startAgentServer(agent: Agent, port: number): Promise<() => Prom
 					writeJson(res, 200, { ok: true, finalized: true });
 					return;
 				}
+				void agent.logger.conversation('conversation.peer.received', {
+					from: body.from,
+					message: body.content,
+					requestAliases: (body.requests ?? []).map((request) => request.alias),
+					blinding: body.blinding,
+				});
 				// Acknowledge immediately; the agent processes asynchronously to avoid
 				// deadlocks where peer A is waiting on peer B who is waiting on peer A.
 				writeJson(res, 200, { ok: true });
 				agent
 					.runTurn(`[message from ${body.from}]\n\n${body.content}`, body.requests ?? [])
-					.catch((err) => console.error(`[${agent.config.name}] turn failed:`, err));
+					.catch((err) => {
+						void agent.logger.conversation('conversation.turn.failed', {
+							from: body.from,
+							error: String((err as Error).message ?? err),
+						});
+						console.error(`[${agent.config.name}] turn failed:`, err);
+					});
 				return;
 			}
 

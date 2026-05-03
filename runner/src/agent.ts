@@ -4,12 +4,14 @@ import { MISTActions, MISTTx, type Hex } from './sdk.ts';
 
 import type { AgentConfig } from './config.ts';
 import type { RunnerChainAdapter } from './chainAdapter.ts';
+import type { AgentLogger } from './logger.ts';
 import type { PeerEnvelope, RequestEntry, SerializedRequest } from './types.ts';
 import { buildTools } from './tools.ts';
 
 export class Agent {
 	readonly config: AgentConfig;
 	readonly chain: RunnerChainAdapter;
+	readonly logger: AgentLogger;
 	readonly mist: MISTActions;
 	readonly requests = new Map<string, RequestEntry>();
 	readonly tokenSymbolByAddress: Record<string, string>;
@@ -18,23 +20,24 @@ export class Agent {
 	private finalized = false;
 	private finalReason: string | null = null;
 
-	private constructor(config: AgentConfig, chain: RunnerChainAdapter, mist: MISTActions) {
+	private constructor(config: AgentConfig, chain: RunnerChainAdapter, logger: AgentLogger, mist: MISTActions) {
 		this.config = config;
 		this.chain = chain;
+		this.logger = logger;
 		this.mist = mist;
 		this.tokenSymbolByAddress = Object.fromEntries(
 			Object.entries(config.env.tokens).map(([sym, addr]) => [addr.toLowerCase(), sym]),
 		);
 	}
 
-	static async create(config: AgentConfig, chain: RunnerChainAdapter): Promise<Agent> {
+	static async create(config: AgentConfig, chain: RunnerChainAdapter, logger: AgentLogger): Promise<Agent> {
 		const mist = await MISTActions.init(config.env.privateKey, {
 			chamberContractAddress: chain.chamberContractAddress,
 			escrowContractAddress: chain.escrowContractAddress,
 			getTxArray: chain.getTxArray,
 			sendTransaction: chain.sendTransaction,
 		});
-		return new Agent(config, chain, mist);
+		return new Agent(config, chain, logger, mist);
 	}
 
 	get isFinalized(): boolean {
@@ -44,6 +47,7 @@ export class Agent {
 	finalize(reason: string): void {
 		this.finalized = true;
 		this.finalReason = reason;
+		void this.logger.conversation('conversation.finalized', { reason });
 	}
 
 	get finalSummary(): string | null {
@@ -101,6 +105,17 @@ export class Agent {
 					.join('; ')}]`
 				: '';
 
+			await this.logger.conversation('conversation.turn.received', {
+				message: userMessage,
+				attachedRequests: attachedRequests.map((request) => ({
+					alias: request.alias,
+					owner: request.owner,
+					token: request.token,
+					tokenSymbol: request.tokenSymbol,
+					amount: request.amount,
+				})),
+			});
+
 			this.messages.push({ role: 'user', content: userMessage + attachmentNote });
 			await this.step();
 		});
@@ -137,10 +152,26 @@ export class Agent {
 		});
 
 		this.messages.push(...result.response.messages);
+		for (const message of result.response.messages) {
+			await this.logger.conversation('conversation.turn.emitted', {
+				role: message.role,
+				content: this.messageContentForLog(message.content),
+			});
+		}
 
 		if (verbose && result.text) {
 			console.log(`[${this.config.name}] said: ${result.text}`);
 		}
+	}
+
+	private messageContentForLog(content: CoreMessage['content']): unknown {
+		if (typeof content === 'string') return content;
+		return content.map((part) => {
+			if (part.type === 'text') return { type: part.type, text: part.text };
+			if (part.type === 'tool-call') return { type: part.type, toolName: part.toolName, args: part.args };
+			if (part.type === 'tool-result') return { type: part.type, toolName: part.toolName, result: part.result };
+			return { type: part.type };
+		});
 	}
 
 	private systemPrompt(): string {

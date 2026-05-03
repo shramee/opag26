@@ -52,7 +52,13 @@ export function buildTools(agent: Agent) {
 			}),
 			execute: async ({ alias }) => {
 				const entry = agent.getRequest(alias);
+				await agent.logger.blockchain('mist.deposit.started', {
+					alias,
+					token: entry.tx.token,
+					amount: entry.tx.amount.toString(),
+				});
 				const txHash = await agent.mist.deposit(entry.tx);
+				await agent.logger.blockchain('mist.deposit.completed', { alias, txHash });
 				return { alias, txHash };
 			},
 		}),
@@ -63,6 +69,7 @@ export function buildTools(agent: Agent) {
 				'Also includes your on-chain ERC-20 balance for known tokens.',
 			parameters: z.object({}),
 			execute: async () => {
+				await agent.logger.blockchain('mist.balanceCheck.started', {});
 				const tokenSymbols = agent.tokenSymbolByAddress;
 				const mistBalances = await computeBalances(agent.mist, tokenSymbols);
 				const onchain: Array<{ token: string; symbol: string; balance: string }> = [];
@@ -70,6 +77,10 @@ export function buildTools(agent: Agent) {
 					const bal = await agent.chain.getErc20Balance(addr);
 					onchain.push({ token: addr, symbol, balance: bal.toString() });
 				}
+				await agent.logger.blockchain('mist.balanceCheck.completed', {
+					onchainCount: onchain.length,
+					mistCount: mistBalances.length,
+				});
 				return { mist: mistBalances, onchain, address: agent.chain.address };
 			},
 		}),
@@ -86,7 +97,18 @@ export function buildTools(agent: Agent) {
 			execute: async ({ creatorAlias, recipientAlias, blinding }) => {
 				const creator = agent.getRequest(creatorAlias);
 				const recipient = agent.getRequest(recipientAlias);
+				await agent.logger.blockchain('mist.escrowFund.started', {
+					creatorAlias,
+					recipientAlias,
+					blinding: toHex(blinding),
+				});
 				const escrowReq = await agent.mist.escrowFund(creator.tx, recipient.tx, toHex(blinding));
+				await agent.logger.blockchain('mist.escrowFund.completed', {
+					creatorAlias,
+					recipientAlias,
+					amountLocked: escrowReq.amount.toString(),
+					token: escrowReq.token,
+				});
 				return {
 					ok: true,
 					escrowSecrets: escrowReq.secrets,
@@ -108,7 +130,16 @@ export function buildTools(agent: Agent) {
 			execute: async ({ creatorAlias, recipientAlias, blinding }) => {
 				const creator = agent.getRequest(creatorAlias);
 				const recipient = agent.getRequest(recipientAlias);
+				await agent.logger.blockchain('mist.escrowClaim.started', {
+					creatorAlias,
+					recipientAlias,
+					blinding: toHex(blinding),
+				});
 				await agent.mist.escrowClaim(creator.tx, recipient.tx, toHex(blinding));
+				await agent.logger.blockchain('mist.escrowClaim.completed', {
+					creatorAlias,
+					recipientAlias,
+				});
 				return { ok: true };
 			},
 		}),
@@ -118,7 +149,13 @@ export function buildTools(agent: Agent) {
 			parameters: z.object({ alias: z.string() }),
 			execute: async ({ alias }) => {
 				const entry = agent.getRequest(alias);
+				await agent.logger.blockchain('mist.checkStatus.started', {
+					alias,
+					token: entry.tx.token,
+					amount: entry.tx.amount.toString(),
+				});
 				const status = await agent.mist.checkStatus(entry.tx);
+				await agent.logger.blockchain('mist.checkStatus.completed', { alias, status });
 				return { alias, status };
 			},
 		}),
@@ -140,13 +177,29 @@ export function buildTools(agent: Agent) {
 			}),
 			execute: async ({ message, share, blinding }) => {
 				const requests: SerializedRequest[] = (share ?? []).map((alias) => agent.serializeRequest(alias));
-				const ack = await sendToPeer(agent.config.env.peerUrl, {
-					from: agent.config.name,
-					content: message,
-					requests: requests.length ? requests : undefined,
+				await agent.logger.conversation('conversation.peer.sent', {
+					message,
+					share: share ?? [],
 					blinding,
 				});
-				return ack;
+				try {
+					const ack = await sendToPeer(agent.config.env.peerUrl, {
+						from: agent.config.name,
+						content: message,
+						requests: requests.length ? requests : undefined,
+						blinding,
+					});
+					await agent.logger.conversation('conversation.peer.ack', {
+						ok: ack.ok,
+						error: ack.error,
+					});
+					return ack;
+				} catch (error) {
+					await agent.logger.conversation('conversation.peer.sendFailed', {
+						error: String((error as Error).message ?? error),
+					});
+					throw error;
+				}
 			},
 		}),
 
