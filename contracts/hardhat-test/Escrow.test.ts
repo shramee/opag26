@@ -1,10 +1,10 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { Chamber, DummyERC20, Escrow } from "../typechain-types";
-import { MISTActions, proveMist, proofToContractArgs, init, merkleProofForTx, hash2, Hex } from "@opag26/sdk";
+import { MISTActions, proveMist, proofToContractArgs, init, merkleProofForTx, hash2, Hex, MISTTx, hash3 } from "@opag26/sdk";
 
 async function setup() {
-  const [admin, bob, jill] = await ethers.getSigners();
+  const [admin, bob] = await ethers.getSigners();
   const bobAddr = bob.address;
 
   await init(); // Initialize the WASM module before running tests
@@ -29,13 +29,19 @@ async function setup() {
   const EscrowFactory = await ethers.getContractFactory("Escrow");
   const escrow = (await EscrowFactory.deploy(await chamber.getAddress(), await EscrowVerifier.getAddress())) as unknown as Escrow;
 
-  const mistActions = await MISTActions.init("0x1234", {
+  const mistAdmin = await MISTActions.init("0x1234", {
     getTxArray: () => chamber.getTxArray(),
     sendTransaction: async (tx) => admin.sendTransaction(tx),
     chamberContractAddress: await chamber.getAddress() as Hex,
     escrowContractAddress: await escrow.getAddress() as Hex,
   });
 
+  const mistBob = await MISTActions.init("0x1234", {
+    getTxArray: () => chamber.getTxArray(),
+    sendTransaction: async (tx) => bob.sendTransaction(tx),
+    chamberContractAddress: await chamber.getAddress() as Hex,
+    escrowContractAddress: await escrow.getAddress() as Hex,
+  });
 
   // Act: approve and deposit 1 tknA
   await tknA.approve(await chamber.getAddress(), 100n);
@@ -46,7 +52,7 @@ async function setup() {
   await chamber.deposit(0xffffffff456n, 25n, await tknA.getAddress());
   await chamber.deposit(0xffffffff567n, 34n, await tknA.getAddress());
 
-  return { admin, bob, jill, bobAddr, tknA, tknB, chamber, escrow, mistActions };
+  return { admin, bob, bobAddr, tknA, tknB, chamber, escrow, mistAdmin, mistBob };
 }
 
 describe("Chamber", function () {
@@ -100,19 +106,53 @@ describe("Chamber", function () {
   });
 
   it("deposit and spend MISTActions", async function () {
-    const { bobAddr, tknA, chamber, mistActions } = await setup();
+    const { bobAddr, tknA, chamber, mistAdmin } = await setup();
 
     const amt = 1n;
-    const request = mistActions.requestFunds(amt, await tknA.getAddress());
+    const request = mistAdmin.requestFunds(amt, await tknA.getAddress());
 
-    await mistActions.deposit(request, amt);
+    await mistAdmin.deposit(request);
 
-    expect(await mistActions.checkStatus(request)).to.equal("PAID");
+    expect(await mistAdmin.checkStatus(request)).to.equal("PAID");
 
-    await mistActions.withdrawEvm(request, bobAddr);
+    await mistAdmin.withdrawEvm(request, bobAddr);
 
-    expect(await chamber.nullified(BigInt(mistActions.requestNullifer(request)))).to.be.true;
+    expect(await chamber.nullified(BigInt(request.requestNullifer()))).to.be.true;
 
     expect(await tknA.balanceOf(bobAddr)).to.equal(amt);
+  });
+});
+
+describe("Escrow", function () {
+  const BLINDING = '0xcafebabe_deadbeef';
+
+  async function escrowRequest(recipientsRequest: MISTTx, adminRequest: MISTTx, blinding: Hex): Promise<MISTTx> {
+    const escrowReq: any = {
+      amount: recipientsRequest.amount,
+      token: recipientsRequest.token,
+    }
+    escrowReq._key = hash3(blinding, recipientsRequest.requestTxHash(), adminRequest.requestTxHash());
+    return escrowReq;
+  }
+
+  it("escrow flow", async function () {
+    const { admin, bob, bobAddr, tknA, tknB, mistAdmin, mistBob } = await setup();
+    await tknA.transfer(bobAddr, 100_000n);
+
+    console.log("Bob A:", await tknA.balanceOf(bob.address), "Bob B:", await tknB.balanceOf(bob.address));
+    console.log("Bob A:", await tknA.balanceOf(admin.address), "Admin B:", await tknB.balanceOf(admin.address));
+
+
+    // bob wants to swap 100A for 5B in escrow with admin
+
+    // bob request for 5B
+    const recipientsRequest = mistBob.requestFunds(5n, await tknB.getAddress());
+
+    // admin requests for 100A
+    const adminRequest = mistAdmin.requestFunds(100n, await tknA.getAddress());
+
+    // parties share BLINDING, adminRequest and recipientsRequest
+
+
   });
 });
