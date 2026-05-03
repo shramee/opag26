@@ -170,7 +170,7 @@ function Logo({ size = 22 }: { size?: number }) {
         <path d="M6 22 L12 10 L16 18 L20 10 L26 22" stroke={G} strokeWidth="1.8" fill="none" />
         <circle cx="16" cy="22" r="1.5" fill={G} />
       </svg>
-      <span style={{ fontFamily: MONO, color: G, fontSize: 16, fontWeight: 700, letterSpacing: '0.32em' }}>MIST_OTC</span>
+      <span style={{ fontFamily: MONO, color: G, fontSize: 16, fontWeight: 700, letterSpacing: '0.32em' }}>AGENTS_WITH_MIST</span>
     </div>
   )
 }
@@ -283,7 +283,7 @@ function Hero({ onLaunchApp }: { onLaunchApp: () => void }) {
       <div style={{ position: 'relative', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
         <div style={{ color: G_DIM, fontFamily: MONO, fontSize: 12, marginBottom: 32, lineHeight: 1.7 }}>
           <Typing speed={18} startDelay={300} lines={[
-            '> ssh broker@mist.otc -p 443 --zk',
+            '> ssh broker@agents.mist -p 443 --zk',
             '> establishing AXL mesh ......... [OK]',
             '> 0G memory primed .............. [OK]',
             '> KeeperHub relay armed ......... [OK]',
@@ -634,7 +634,7 @@ function Footer() {
         <div>
           <Logo />
           <div style={{ marginTop: 18, maxWidth: 320, lineHeight: 1.6 }}>A peer-to-peer dark pool for the post-public-chain era. No mempool, no spread, no witness.</div>
-          <div style={{ marginTop: 24, color: G_DEEP, fontSize: 11 }}>© 2026 MIST_OTC.PROTOCOL — distributed under MIT</div>
+          <div style={{ marginTop: 24, color: G_DEEP, fontSize: 11 }}>© 2026 AGENTS_WITH_MIST.PROTOCOL — distributed under MIT</div>
         </div>
         {([
           ['PROTOCOL', ['Whitepaper', 'Audits', 'Bug Bounty', 'Mainnet Status']],
