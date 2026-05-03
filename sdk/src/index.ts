@@ -4,6 +4,7 @@ import {
 	txHash,
 	type Witness,
 	hash_with_asset,
+	hash3Sync as hash3,
 } from '@mistcash/sdk';
 import { encodeFunctionData, erc20Abi } from 'viem';
 import { CHAMBER_ABI } from './contracts/chamber';
@@ -11,8 +12,9 @@ import { Hex, merkleProofForTx, proveMist, strToHex, toTokenUnits } from './util
 import { init } from './gnark';
 import { ProofResponse } from './gnark/types';
 import { proofToContractArgs } from './proof';
-import { hash } from 'node:crypto';
+import { MISTTxData, MISTTx } from './mistTx';
 
+export * from './mistTx';
 export * from './utils';
 export * from './gnark';
 export * from './contracts/chamber';
@@ -29,38 +31,10 @@ export interface StorageAdapter {
 	set(key: string, value: string): void | Promise<void>;
 }
 
-/**
- * A private payment request created by the requestor.
- * The public fields (amount, token, secrets) are safe to share.
- * The underscore-prefixed fields are private — only the creator knows them.
- */
-export interface RequestMIST {
-
-	amount: bigint;
-	token: string; // token address
-	/**
-	 * Public payment secret — goes in the payment URL.
-	 * txSecret = h2(claimingKey, ownerAddress).
-	 * The payer calls chamber.deposit(txSecret, amount, token).
-	 */
-	secrets: string;
-	/** claimingKey = h2(txIndex, masterHidingKey) — used for withdrawal auth */
-	_key?: string;
-	/**
-	 * MIST owner identity used when this request was created.
-	 * For ZK path: Poseidon-derived accountAddress.
-	 * For EVM no-ZK path: uint256(uint160(evmWalletAddress)).
-	 */
-	_owner?: string;
-	/** Monotonic index used to derive _key */
-	_index?: number;
-	_status?: 'PENDING' | 'PAID' | 'WITHDRAWN';
-}
-
 /** Serialisable snapshot of MISTActions state for backup / restore */
 export interface MISTState {
 	txCount: number;
-	requests: RequestMIST[];
+	requests: MISTTxData[];
 }
 
 interface ChainAdapter {
@@ -135,7 +109,7 @@ export class MISTActions {
 	txCount = 0;
 
 	/** All requests created by this instance (requestor role). */
-	requests: RequestMIST[] = [];
+	requests: MISTTx[] = [];
 
 	private store?: StorageAdapter;
 
@@ -167,14 +141,14 @@ export class MISTActions {
 	 * @param token    ERC-20 token address on the payment chain
 	 * @param recipient The recipient of the payment
 	 */
-	requestFunds(amount: string | bigint, token: string, recipient?: string): RequestMIST {
+	requestFunds(amount: string | bigint, token: string, recipient?: string): MISTTx {
 		const txIndex = this.txCount++;
 		const owner = recipient || this.accountAddress;
 
 		const claimingKey = hash2(`${txIndex}`, this.masterHidingKey);
 		const secrets = `0x${BigInt(deriveTxSecret(claimingKey, owner)).toString(16)}` as Hex;
 
-		const request: RequestMIST = {
+		const request = new MISTTx({
 			amount: typeof amount === 'string' ? toTokenUnits(amount, 18) : amount,
 			token,
 			secrets,
@@ -182,7 +156,7 @@ export class MISTActions {
 			_owner: owner,
 			_index: txIndex,
 			_status: 'PENDING',
-		};
+		});
 
 		this.requests.push(request);
 		return request;
@@ -195,22 +169,21 @@ export class MISTActions {
 	 *
 	 * Flow: ERC-20 approve → Chamber.deposit(txSecret, amount, token)
 	 *
-	 * @param request     The RequestMIST to pay (only public fields needed)
+	 * @param request     The MISTTx to pay (only public fields needed)
 	 * @param amountRaw   Amount in token base units (e.g. 10_000_000n for 10 USDC).
 	 *                    Typically toTokenUnits(request.amount) + fee.
 	 */
 	async deposit(
-		request: RequestMIST,
-		amountRaw: bigint,
+		tx: MISTTx,
 	): Promise<Hex> {
-		const token = request.token as Hex;
+		const token = tx.token as Hex;
 
 		await this._chainAdapter.sendTransaction({
 			to: token,
 			data: encodeFunctionData({
 				abi: erc20Abi,
 				functionName: 'approve',
-				args: [this._chainAdapter.chamberContractAddress, amountRaw],
+				args: [this._chainAdapter.chamberContractAddress, tx.amount],
 			}),
 		});
 
@@ -219,7 +192,7 @@ export class MISTActions {
 			data: encodeFunctionData({
 				abi: CHAMBER_ABI,
 				functionName: 'deposit',
-				args: [BigInt(request.secrets), amountRaw, token],
+				args: [BigInt(tx.secrets), tx.amount, token],
 			}),
 		}) as Promise<Hex>;
 	}
@@ -233,12 +206,12 @@ export class MISTActions {
 	 * Updates the in-memory _status on the request.
 	 */
 	async checkStatus(
-		request: RequestMIST
+		request: MISTTx
 	): Promise<'PENDING' | 'PAID' | 'WITHDRAWN'> {
 		if (request._status === 'WITHDRAWN') return 'WITHDRAWN';
 
 		const txLeaves = await this._getTxArray();
-		const addr = this.requestTxHash(request);
+		const addr = request.requestTxHash();
 
 		if (txLeaves.indexOf(BigInt(addr)) === -1) return 'PENDING';
 
@@ -250,7 +223,7 @@ export class MISTActions {
 	 * Scan all PENDING requests and update their statuses.
 	 * Returns the subset that are now PAID (ready to withdraw).
 	 */
-	async scanPayments(): Promise<RequestMIST[]> {
+	async scanPayments(): Promise<MISTTx[]> {
 		const pending = this.requests.filter((r) => r._status === 'PENDING');
 		const txLeaves = await this._getTxArray();
 		await Promise.all(pending.map((r) => this.checkStatus(r)));
@@ -268,14 +241,14 @@ export class MISTActions {
 	 * Compatible with both the Starknet Chamber (via submitProof callback) and
 	 * the EVM Chamber.handleZkp (pass a viem-based submitProof).
 	 *
-	 * @param request       PAID RequestMIST (must have _key and _owner)
+	 * @param request       PAID MISTTx (must have _key and _owner)
 	 * @param withdrawTo    Address that receives the withdrawn funds
 	 * @param txLeaves      Array of all tx hashes from the merkle tree (getTxArray)
 	 * @param merkleRoot    Current merkle root
 	 * @param submitProof   Callback that submits the generated proof array to the contract
 	 */
 	async withdrawZkp(
-		request: RequestMIST,
+		request: MISTTx,
 		withdrawTo: string,
 		txLeaves: bigint[],
 		submitProof: (
@@ -318,22 +291,13 @@ export class MISTActions {
 		return result.transactionHash ?? '';
 	}
 
-	requestTxHash(request: RequestMIST): string {
-		return hash_with_asset(request.secrets, request.token, request.amount.toString());
-	}
-
-	requestNullifer(request: RequestMIST): string {
-		const nullifierKey = BigInt(request._key || 0) + 1n;
-		const nullifierSecret = hash2(nullifierKey.toString(), request._owner || '0');
-		return hash_with_asset(nullifierSecret.toString(), request.token, request.amount.toString());
-	}
 
 	/**
 	 * Convenience method: fetch merkle state from an EVM Chamber and run withdrawZkp.
 	 * Requires a viem PublicClient and a WalletClient.
 	 */
 	async withdrawEvm(
-		request: RequestMIST,
+		request: MISTTx,
 		withdrawTo: string,
 	): Promise<string> {
 		const txLeaves = await this._getTxArray();
@@ -362,11 +326,11 @@ export class MISTActions {
 	 * Recover a previously-created request by index.
 	 * Useful when re-deriving state from the master key without stored history.
 	 */
-	deriveRequest(txIndex: number, amount: bigint, token: string, ownerAddress?: Hex): RequestMIST {
+	deriveRequest(txIndex: number, amount: bigint, token: string, ownerAddress?: Hex): MISTTx {
 		const owner = ownerAddress ?? this.accountAddress;
 		const claimingKey = hash2(`${txIndex}`, this.masterHidingKey);
 		const secrets = `0x${BigInt(deriveTxSecret(claimingKey, owner)).toString(16)}` as Hex;
-		return { amount, token, secrets, _key: claimingKey, _owner: owner, _index: txIndex, _status: 'PENDING' };
+		return new MISTTx({ amount, token, secrets, _key: claimingKey, _owner: owner, _index: txIndex, _status: 'PENDING' });
 	}
 
 	// ─── Persistence ────────────────────────────────────────────────────────────
@@ -380,7 +344,7 @@ export class MISTActions {
 		);
 		await this.store.set(
 			'mist_requests',
-			JSON.stringify(this.requests),
+			JSON.stringify(this.requests.map((request) => request.data)),
 		);
 	}
 
@@ -394,7 +358,7 @@ export class MISTActions {
 		}
 		const requestsRaw = await this.store.get('mist_requests');
 		if (requestsRaw) {
-			this.requests = JSON.parse(requestsRaw) as MISTState['requests'];
+			this.requests = (JSON.parse(requestsRaw) as MISTState['requests']).map((request) => new MISTTx(request));
 		}
 	}
 
@@ -404,12 +368,12 @@ export class MISTActions {
 	exportState(): MISTState {
 		return {
 			txCount: this.txCount,
-			requests: this.requests,
+			requests: this.requests.map((request) => request.data),
 		};
 	}
 
 	private async _locateTx(
-		request: RequestMIST,
+		request: MISTTx,
 		amountRaw: bigint
 	): Promise<number> {
 		const txHash = BigInt(hash_with_asset(request.secrets, request.token, amountRaw.toString()));
