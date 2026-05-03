@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 import { config as loadDotenv } from 'dotenv';
-import type { Hex } from './sdk.ts';
+import type { Hex } from '@opag26/sdk';
 
 export interface AgentConfig {
 	dir: string;

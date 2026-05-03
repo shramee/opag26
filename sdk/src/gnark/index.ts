@@ -4,7 +4,9 @@ import './wasm_exec.js';
 import WITNESS_JSON from './assignment.json';
 import VK_JSON from './vk.json';
 import PROOF_JSON from './proof.json';
-import { hash3, hash3Sync, hash_with_asset, initWasm, merkleRootFromPath, txHash, WasmExports } from '@mistcash/sdk';
+import mistcash from '@mistcash/sdk';
+import type { WasmExports } from '@mistcash/sdk';
+const { hash3Sync, hash_with_asset, initWasm, merkleRootFromPath, txHash } = mistcash;
 
 export type EscrowWasmExports = WasmExports & { proveEscrow: ProofFn }
 

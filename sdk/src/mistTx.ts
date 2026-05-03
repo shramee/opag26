@@ -1,9 +1,10 @@
-import {
-	hash2Sync as hash2,
-	txSecret as deriveTxSecret,
+import mistcash from '@mistcash/sdk';
+const {
+	hash2Sync: hash2,
+	txSecret: deriveTxSecret,
 	hash_with_asset,
-	hash3Sync as hash3,
-} from '@mistcash/sdk';
+	hash3Sync: hash3,
+} = mistcash;
 
 
 export interface MISTTxData {

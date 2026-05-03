@@ -1,4 +1,4 @@
-import { CHAMBER_ABI, type Hex } from './sdk.ts';
+import { CHAMBER_ABI, type Hex } from '@opag26/sdk';
 import {
 	createPublicClient,
 	createWalletClient,

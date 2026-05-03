@@ -63,6 +63,6 @@ Bob has a `task.md` and so initiates. Jill has no `task.md` and waits. They nego
 
 ## Prerequisites
 
-- Built `@opag26/sdk` (`pnpm --filter @opag26/sdk build`).
+- Built `@opag26/sdk` (`pnpm --filter @opag26/sdk build`). The runner imports the SDK as a normal ESM dependency.
 - A reachable RPC with `Chamber`, `Escrow`, `dumETH`, `dumUSD` deployed (see `contracts/script/DeployContracts.s.sol`).
 - The wallets used by Bob and Jill must be funded with the tokens they're spending and a small amount of native gas.

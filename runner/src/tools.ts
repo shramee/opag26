@@ -1,6 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import type { Hex } from './sdk.ts';
+import type { Hex } from '@opag26/sdk';
 
 import type { Agent } from './agent.ts';
 import { resolveToken } from './config.ts';

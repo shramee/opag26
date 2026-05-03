@@ -1,11 +1,11 @@
-import {
-	hash2Sync as hash2,
-	txSecret as deriveTxSecret,
-	txHash,
-	type Witness,
+import mistcashNs from '@mistcash/sdk';
+import type { Witness } from '@mistcash/sdk';
+const {
+	hash2Sync: hash2,
+	txSecret: deriveTxSecret,
 	hash_with_asset,
-	hash3Sync as hash3,
-} from '@mistcash/sdk';
+	hash3Sync: hash3,
+} = mistcashNs;
 import { encodeFunctionData, erc20Abi } from 'viem';
 import { CHAMBER_ABI } from './contracts/chamber';
 import { Hex, merkleProofForTx, proveMist, strToHex, toTokenUnits } from './utils';
@@ -21,7 +21,11 @@ export * from './gnark';
 export * from './contracts/chamber';
 export * from './contracts/escrow';
 export * from './proof';
-export * as mistcash from '@mistcash/sdk';
+// `export * as ns from '@mistcash/sdk'` would only re-export names that
+// cjs-module-lexer can detect — which is none, since the package is CJS without
+// an exports map. Re-exporting the default object preserves the same access
+// pattern (`mistcash.hash2Sync(...)`) for consumers.
+export { mistcashNs as mistcash };
 
 /**
  * Pluggable persistence adapter.

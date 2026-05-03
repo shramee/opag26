@@ -1,4 +1,4 @@
-import type { MISTActions } from './sdk.ts';
+import type { MISTActions } from '@opag26/sdk';
 
 export interface TokenBalance {
 	token: string;

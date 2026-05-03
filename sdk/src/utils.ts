@@ -1,4 +1,9 @@
-import { calculateMerkleRootAndProof, hash2Sync, prove_groth16, Witness } from '@mistcash/sdk';
+// `@mistcash/sdk` is published as CommonJS without a package `exports` map, so
+// Node ESM cannot resolve named imports from it. Default-import + destructure
+// works in both ESM and CJS targets via esbuild's CJS interop.
+import mistcash from '@mistcash/sdk';
+import type { Witness } from '@mistcash/sdk';
+const { calculateMerkleRootAndProof, prove_groth16, hash2, hash3, txHash, txSecret } = mistcash;
 
 export function proveMist(witness: Witness) {
 	witness.AuthDone = witness.AuthDone || "0";
@@ -18,7 +23,7 @@ export function merkleProofForTx(transactions: bigint[], txHash: bigint, circuit
 	};
 }
 
-export { hash2, hash3, txHash, txSecret } from '@mistcash/sdk';
+export { hash2, hash3, txHash, txSecret };
 
 /**
  * Converts a character into hexadecimal character code

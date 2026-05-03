@@ -1,4 +1,5 @@
-import { hash2Sync, hash3Sync } from '@mistcash/sdk';
+import mistcash from '@mistcash/sdk';
+const { hash2Sync, hash3Sync } = mistcash;
 
 export const CHAMBER_ABI = [
 	// ======== View / Read ========

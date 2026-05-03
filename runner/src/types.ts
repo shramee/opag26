@@ -1,4 +1,4 @@
-import type { MISTTx } from './sdk.ts';
+import type { MISTTx } from '@opag26/sdk';
 
 export interface SerializedRequest {
 	alias: string;

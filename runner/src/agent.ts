@@ -1,6 +1,6 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { generateText, type CoreMessage } from 'ai';
-import { MISTActions, MISTTx, type Hex } from './sdk.ts';
+import { MISTActions, MISTTx, type Hex } from '@opag26/sdk';
 
 import type { AgentConfig } from './config.ts';
 import type { RunnerChainAdapter } from './chainAdapter.ts';
