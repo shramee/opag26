@@ -14,6 +14,14 @@ function toHex(value: string): Hex {
 	return hex as Hex;
 }
 
+function describeToolError(error: unknown): { message: string; details?: string } {
+	if (error instanceof Error) {
+		const details = (error as Error & { details?: string }).details;
+		return { message: error.message, details };
+	}
+	return { message: String(error) };
+}
+
 export function buildTools(agent: Agent) {
 	return {
 		requestPayment: tool({
@@ -130,17 +138,34 @@ export function buildTools(agent: Agent) {
 			execute: async ({ creatorAlias, recipientAlias, blinding }) => {
 				const creator = agent.getRequest(creatorAlias);
 				const recipient = agent.getRequest(recipientAlias);
+				const blindingHex = toHex(blinding);
 				await agent.logger.blockchain('mist.escrowClaim.started', {
 					creatorAlias,
 					recipientAlias,
-					blinding: toHex(blinding),
+					blinding: blindingHex,
 				});
-				await agent.mist.escrowClaim(creator.tx, recipient.tx, toHex(blinding));
-				await agent.logger.blockchain('mist.escrowClaim.completed', {
-					creatorAlias,
-					recipientAlias,
-				});
-				return { ok: true };
+				try {
+					await agent.mist.escrowClaim(creator.tx, recipient.tx, blindingHex);
+					await agent.logger.blockchain('mist.escrowClaim.completed', {
+						creatorAlias,
+						recipientAlias,
+					});
+					return { ok: true };
+				} catch (error) {
+					const described = describeToolError(error);
+					await agent.logger.blockchain('mist.escrowClaim.failed', {
+						creatorAlias,
+						recipientAlias,
+						blinding: blindingHex,
+						error: described.message,
+						details: described.details,
+					});
+					return {
+						ok: false,
+						error: described.message,
+						details: described.details,
+					};
+				}
 			},
 		}),
 
