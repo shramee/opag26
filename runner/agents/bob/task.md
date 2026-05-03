@@ -1,0 +1,1 @@
+Open a negotiation with Jill (your peer) to swap your **23 dumETH** for as much **dumUSD** as possible. Use `sendPeer` to greet her, propose your opening ask, and drive the haggling. Once a price is agreed, run the full MIST escrow protocol as the **recipient** (escrowClaim side). Finalize when the swap settles or when no agreement is reachable.

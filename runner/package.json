@@ -1,0 +1,34 @@
+{
+	"name": "@opag26/runner",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Vercel AI based agent runner for MIST private OTC swaps. Boots an autonomous agent from a directory containing a README (persona), task.md (initial task), and .env (keys + addresses).",
+	"license": "MIT",
+	"type": "module",
+	"bin": {
+		"opag26-runner": "./bin/runner.mjs"
+	},
+	"scripts": {
+		"dev": "tsx src/cli.ts",
+		"start": "tsx src/cli.ts",
+		"typecheck": "tsc --noEmit",
+		"bob": "tsx src/cli.ts ./agents/bob",
+		"jill": "tsx src/cli.ts ./agents/jill"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"dependencies": {
+		"@ai-sdk/anthropic": "^1.2.10",
+		"@opag26/sdk": "link:../sdk",
+		"ai": "^4.3.16",
+		"dotenv": "^16.4.7",
+		"viem": "^2.48.8",
+		"zod": "^3.23.8"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.0",
+		"tsx": "^4.19.2",
+		"typescript": "^5.8.3"
+	}
+}
