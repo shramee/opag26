@@ -7,3 +7,6 @@
 /contracts/hardhat-artifacts
 /contracts/typechain-types
 /contracts/hardhat-cache
+/agent
+/runner/agents/bob
+/runner/agents/jill/logs
