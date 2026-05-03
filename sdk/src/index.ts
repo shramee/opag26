@@ -11,6 +11,7 @@ import { Hex, merkleProofForTx, proveMist, strToHex, toTokenUnits } from './util
 import { init } from './gnark';
 import { ProofResponse } from './gnark/types';
 import { proofToContractArgs } from './proof';
+import { hash } from 'node:crypto';
 
 export * from './utils';
 export * from './gnark';
@@ -34,10 +35,9 @@ export interface StorageAdapter {
  * The underscore-prefixed fields are private — only the creator knows them.
  */
 export interface RequestMIST {
-	/** Human-readable amount, e.g. "10.00" */
-	amount: string;
-	/** ERC-20 token address on the payment chain (e.g. USDC) */
-	token: string;
+
+	amount: bigint;
+	token: string; // token address
 	/**
 	 * Public payment secret — goes in the payment URL.
 	 * txSecret = h2(claimingKey, ownerAddress).
@@ -61,6 +61,16 @@ export interface RequestMIST {
 export interface MISTState {
 	txCount: number;
 	requests: RequestMIST[];
+}
+
+interface ChainAdapter {
+	getTxArray: () => Promise<bigint[]>;
+	sendTransaction: (tx: {
+		to: string;
+		data: string;
+	}) => Promise<any>;
+	chamberContractAddress: Hex;
+	escrowContractAddress: Hex;
 }
 
 /**
@@ -94,7 +104,7 @@ export interface MISTState {
  *   await mist.deposit(request, walletClient, CHAMBER_ADDRESS, amountRaw);
  */
 export class MISTActions {
-	// ── Identity ────────────────────────────────────────────────────────────────
+	_chainAdapter: ChainAdapter;
 
 	/** Raw master entropy (PRF output or BIP-39-derived hex) */
 	readonly masterKey: Hex;
@@ -131,17 +141,18 @@ export class MISTActions {
 
 	// ── Construction ────────────────────────────────────────────────────────────
 
-	static async init(masterKey: Hex | string, store?: StorageAdapter): Promise<MISTActions> {
+	static async init(masterKey: Hex | string, _chainAdapter: ChainAdapter, store?: StorageAdapter): Promise<MISTActions> {
 		await init();
-		return new MISTActions(masterKey, store);
+		return new MISTActions(masterKey, _chainAdapter, store);
 	}
 
-	private constructor(masterKey: Hex | string, store?: StorageAdapter) {
+	private constructor(masterKey: Hex | string, _chainAdapter: ChainAdapter, store?: StorageAdapter) {
 		this.masterKey = masterKey as Hex;
 		this.masterHidingKey = hash2(strToHex('masterHiding'), masterKey);
 		this.accountAuthKey = hash2(strToHex('ownerSecret'), masterKey);
 		this.accountAddress = hash2(strToHex('I own this transaction'), this.accountAuthKey.toString());
 		this.store = store;
+		this._chainAdapter = _chainAdapter;
 	}
 
 	// ─── Requesting funds ───────────────────────────────────────────────────────
@@ -156,7 +167,7 @@ export class MISTActions {
 	 * @param token    ERC-20 token address on the payment chain
 	 * @param recipient The recipient of the payment
 	 */
-	requestFunds(amount: string, token: string, recipient?: string): RequestMIST {
+	requestFunds(amount: string | bigint, token: string, recipient?: string): RequestMIST {
 		const txIndex = this.txCount++;
 		const owner = recipient || this.accountAddress;
 
@@ -164,7 +175,7 @@ export class MISTActions {
 		const secrets = `0x${BigInt(deriveTxSecret(claimingKey, owner)).toString(16)}` as Hex;
 
 		const request: RequestMIST = {
-			amount,
+			amount: typeof amount === 'string' ? toTokenUnits(amount, 18) : amount,
 			token,
 			secrets,
 			_key: claimingKey,
@@ -185,30 +196,26 @@ export class MISTActions {
 	 * Flow: ERC-20 approve → Chamber.deposit(txSecret, amount, token)
 	 *
 	 * @param request     The RequestMIST to pay (only public fields needed)
-	 * @param walletClient  Viem WalletClient connected to the correct chain
-	 * @param chamberAddress  Chamber contract address on this chain
 	 * @param amountRaw   Amount in token base units (e.g. 10_000_000n for 10 USDC).
 	 *                    Typically toTokenUnits(request.amount) + fee.
 	 */
 	async deposit(
 		request: RequestMIST,
-		walletClient: any,
-		chamberAddress: Hex,
 		amountRaw: bigint,
 	): Promise<Hex> {
 		const token = request.token as Hex;
 
-		await walletClient.sendTransaction({
+		await this._chainAdapter.sendTransaction({
 			to: token,
 			data: encodeFunctionData({
 				abi: erc20Abi,
 				functionName: 'approve',
-				args: [chamberAddress, amountRaw],
+				args: [this._chainAdapter.chamberContractAddress, amountRaw],
 			}),
 		});
 
-		return walletClient.sendTransaction({
-			to: chamberAddress,
+		return this._chainAdapter.sendTransaction({
+			to: this._chainAdapter.chamberContractAddress,
 			data: encodeFunctionData({
 				abi: CHAMBER_ABI,
 				functionName: 'deposit',
@@ -226,20 +233,14 @@ export class MISTActions {
 	 * Updates the in-memory _status on the request.
 	 */
 	async checkStatus(
-		request: RequestMIST,
-		publicClient: any,
-		chamberAddress: Hex,
+		request: RequestMIST
 	): Promise<'PENDING' | 'PAID' | 'WITHDRAWN'> {
 		if (request._status === 'WITHDRAWN') return 'WITHDRAWN';
 
-		const [, addr] = (await publicClient.readContract({
-			address: chamberAddress,
-			abi: CHAMBER_ABI,
-			functionName: 'assetsFromSecret',
-			args: [BigInt(request.secrets)],
-		})) as [bigint, string];
+		const txLeaves = await this._getTxArray();
+		const addr = this.requestTxHash(request);
 
-		if (BigInt(addr) === 0n) return 'PENDING';
+		if (txLeaves.indexOf(BigInt(addr)) === -1) return 'PENDING';
 
 		request._status = 'PAID';
 		return 'PAID';
@@ -249,9 +250,10 @@ export class MISTActions {
 	 * Scan all PENDING requests and update their statuses.
 	 * Returns the subset that are now PAID (ready to withdraw).
 	 */
-	async scanPayments(publicClient: any, chamberAddress: Hex): Promise<RequestMIST[]> {
+	async scanPayments(): Promise<RequestMIST[]> {
 		const pending = this.requests.filter((r) => r._status === 'PENDING');
-		await Promise.all(pending.map((r) => this.checkStatus(r, publicClient, chamberAddress)));
+		const txLeaves = await this._getTxArray();
+		await Promise.all(pending.map((r) => this.checkStatus(r)));
 		return this.requests.filter((r) => r._status === 'PAID');
 	}
 
@@ -283,11 +285,9 @@ export class MISTActions {
 		if (!request._key || !request._owner) {
 			throw new Error('Private fields (_key, _owner) missing — only the requestor can withdraw');
 		}
-
-		const amountRaw = toTokenUnits(request.amount);
 		const tokenAddr = request.token;
 		const txHashVal = BigInt(
-			txHash(request._key, request._owner, tokenAddr, amountRaw.toString()),
+			txHash(request._key, request._owner, tokenAddr, request.amount.toString()),
 		);
 		const txIndex = txLeaves.findIndex((leaf) => leaf === txHashVal);
 		if (txIndex === -1) throw new Error('Transaction not found in merkle tree — has it been paid?');
@@ -299,11 +299,11 @@ export class MISTActions {
 			ClaimingKey: request._key,
 			Owner: request._owner,
 			OwnerKey: this.accountAuthKey,
-			TxAsset: { Amount: amountRaw.toString(), Addr: tokenAddr },
+			TxAsset: { Amount: request.amount.toString(), Addr: tokenAddr },
 			AuthDone: '1',
 			MerkleProof: proof,
 			MerkleRoot: root,
-			Withdraw: { Amount: amountRaw.toString(), Addr: tokenAddr },
+			Withdraw: { Amount: request.amount.toString(), Addr: tokenAddr },
 			WithdrawTo: withdrawTo,
 			Tx1Secret: newTxSecret.toString(),
 		};
@@ -318,6 +318,16 @@ export class MISTActions {
 		return result.transactionHash ?? '';
 	}
 
+	requestTxHash(request: RequestMIST): string {
+		return hash_with_asset(request.secrets, request.token, request.amount.toString());
+	}
+
+	requestNullifer(request: RequestMIST): string {
+		const nullifierKey = BigInt(request._key || 0) + 1n;
+		const nullifierSecret = hash2(nullifierKey.toString(), request._owner || '0');
+		return hash_with_asset(nullifierSecret.toString(), request.token, request.amount.toString());
+	}
+
 	/**
 	 * Convenience method: fetch merkle state from an EVM Chamber and run withdrawZkp.
 	 * Requires a viem PublicClient and a WalletClient.
@@ -325,20 +335,21 @@ export class MISTActions {
 	async withdrawEvm(
 		request: RequestMIST,
 		withdrawTo: string,
-		publicClient: any,
-		walletClient: any,
-		chamberAddress: Hex,
 	): Promise<string> {
-		const txLeaves = await this._getTxArray(publicClient, chamberAddress);
+		const txLeaves = await this._getTxArray();
 
 		return this.withdrawZkp(request, withdrawTo, txLeaves, async (proofResp: ProofResponse) => {
 			if (proofResp.status == "success") {
-				const proofArgs = proofToContractArgs(proofResp.proof);
-				const txHash = await walletClient.writeContract({
-					address: chamberAddress,
-					abi: CHAMBER_ABI,
-					functionName: 'handleZkp',
-					args: [proofArgs, proofResp.publicInputs],
+				const proofArgs = proofToContractArgs(proofResp.proof) as unknown as readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+				const publicInputs = proofResp.publicInputs as unknown as readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+
+				const txHash = await this._chainAdapter.sendTransaction({
+					to: this._chainAdapter.chamberContractAddress,
+					data: encodeFunctionData({
+						abi: CHAMBER_ABI,
+						functionName: 'handleZkp',
+						args: [proofArgs, publicInputs],
+					}),
 				});
 				return { success: true, transactionHash: txHash };
 			} else {
@@ -351,7 +362,7 @@ export class MISTActions {
 	 * Recover a previously-created request by index.
 	 * Useful when re-deriving state from the master key without stored history.
 	 */
-	deriveRequest(txIndex: number, amount: string, token: string, ownerAddress?: Hex): RequestMIST {
+	deriveRequest(txIndex: number, amount: bigint, token: string, ownerAddress?: Hex): RequestMIST {
 		const owner = ownerAddress ?? this.accountAddress;
 		const claimingKey = hash2(`${txIndex}`, this.masterHidingKey);
 		const secrets = `0x${BigInt(deriveTxSecret(claimingKey, owner)).toString(16)}` as Hex;
@@ -399,23 +410,22 @@ export class MISTActions {
 
 	private async _locateTx(
 		request: RequestMIST,
-		amountRaw: bigint,
-		publicClient: any,
-		chamberAddress: Hex,
+		amountRaw: bigint
 	): Promise<number> {
 		const txHash = BigInt(hash_with_asset(request.secrets, request.token, amountRaw.toString()));
-		const txArray = await this._getTxArray(publicClient, chamberAddress);
+		const txArray = await this._getTxArray();
 
 		const idx = (txArray as bigint[]).findIndex((leaf) => leaf === txHash);
 		if (idx === -1) throw new Error('Transaction not found in merkle tree — not yet paid?');
 		return idx;
 	}
 
-	private async _getTxArray(publicClient: any, chamberAddress: Hex): Promise<bigint[]> {
-		return publicClient.readContract({
-			address: chamberAddress,
-			abi: CHAMBER_ABI,
-			functionName: 'getTxArray',
-		}) as Promise<bigint[]>;
+	private async _getTxArray(): Promise<bigint[]> {
+		return this._chainAdapter.getTxArray();
+		// return publicClient.readContract({
+		// 	address: chamberAddress,
+		// 	abi: CHAMBER_ABI,
+		// 	functionName: 'getTxArray',
+		// }) as Promise<bigint[]>;
 	}
 }

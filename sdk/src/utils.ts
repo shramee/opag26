@@ -43,7 +43,7 @@ function h2hex(a: string, b: string): Hex {
 }
 
 /** Convert a human-readable USDC amount like "10.00" → 10_000_000n */
-export function toTokenUnits(amount: string, decimals = 6): bigint {
+export function toTokenUnits(amount: string, decimals: number): bigint {
 	return BigInt(Math.round(parseFloat(amount) * 10 ** decimals));
 }
 

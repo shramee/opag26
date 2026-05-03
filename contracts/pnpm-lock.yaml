@@ -12,12 +12,24 @@ importers:
         specifier: link:../sdk
         version: link:../sdk
     devDependencies:
+      '@nomicfoundation/hardhat-ethers':
+        specifier: ^3.1.3
+        version: 3.1.3(ethers@6.16.0)(hardhat@2.28.6(ts-node@10.9.2(@types/node@25.6.0)(typescript@5.9.3))(typescript@5.9.3))
+      '@nomicfoundation/hardhat-ignition':
+        specifier: ^0.15.16
+        version: 0.15.16(@nomicfoundation/hardhat-verify@2.1.3(hardhat@2.28.6(ts-node@10.9.2(@types/node@25.6.0)(typescript@5.9.3))(typescript@5.9.3)))(hardhat@2.28.6(ts-node@10.9.2(@types/node@25.6.0)(typescript@5.9.3))(typescript@5.9.3))
       '@nomicfoundation/hardhat-toolbox':
         specifier: ^5.0.0
         version: 5.0.0(eb556c1434ddf6e8abe413c2806b6e4f)
+      '@nomicfoundation/ignition-core':
+        specifier: ^0.15.15
+        version: 0.15.15
       '@openzeppelin/contracts':
         specifier: ^5.0.0
         version: 5.6.1
+      ethers:
+        specifier: ^6.16.0
+        version: 6.16.0
       hardhat:
         specifier: ^2.22.0
         version: 2.28.6(ts-node@10.9.2(@types/node@25.6.0)(typescript@5.9.3))(typescript@5.9.3)
