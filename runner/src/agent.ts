@@ -1,12 +1,14 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { generateText, type CoreMessage } from 'ai';
-import { MISTActions, MISTTx, type Hex } from './sdk.ts';
+import { MISTActions, MISTTx } from './sdk.ts';
 
 import type { AgentConfig } from './config.ts';
 import type { RunnerChainAdapter } from './chainAdapter.ts';
 import type { AgentLogger } from './logger.ts';
 import type { PeerEnvelope, RequestEntry, SerializedRequest } from './types.ts';
 import { buildTools } from './tools.ts';
+import { createZeroGStorageAdapter } from './zeroGStorage.ts';
+import { sha256 } from 'viem';
 
 export class Agent {
 	readonly config: AgentConfig;
@@ -31,13 +33,38 @@ export class Agent {
 	}
 
 	static async create(config: AgentConfig, chain: RunnerChainAdapter, logger: AgentLogger): Promise<Agent> {
-		const mist = await MISTActions.init(config.env.privateKey, {
+		const store = createZeroGStorageAdapter(config.env.zeroG, config.name, logger);
+		const mist = await MISTActions.init(sha256(config.env.privateKey), {
 			chamberContractAddress: chain.chamberContractAddress,
 			escrowContractAddress: chain.escrowContractAddress,
 			getTxArray: chain.getTxArray,
 			sendTransaction: chain.sendTransaction,
-		});
+		}, store);
+		if (store) {
+			try {
+				await mist.load();
+				await logger.blockchain('mist.store.load.completed', {
+					txCount: mist.txCount,
+					requestCount: mist.requests.length,
+				});
+			} catch (error) {
+				await logger.blockchain('mist.store.load.failed', {
+					error: String((error as Error).message ?? error),
+				});
+			}
+		}
 		return new Agent(config, chain, logger, mist);
+	}
+
+	async persistMistState(reason: string): Promise<void> {
+		try {
+			await this.mist.save();
+		} catch (error) {
+			await this.logger.blockchain('mist.store.save.failed', {
+				reason,
+				error: String((error as Error).message ?? error),
+			});
+		}
 	}
 
 	get isFinalized(): boolean {
@@ -196,6 +223,7 @@ export class Agent {
 			'- Refer to MIST requests by stable string aliases (e.g. "myDumUsdReceive").',
 			'- When sharing a request with your peer, list the alias under `share`. The peer will register it under the same alias on their side.',
 			'- Coordinate the BLINDING value with your peer before either party calls escrowFund.',
+			'- If you need to propose a BLINDING value yourself, call `generateBlinding` first and reuse the returned value exactly. Do not invent BLINDING strings in prose.',
 			'- After a successful swap, call `finalize` to end the conversation.',
 		].join('\n');
 	}

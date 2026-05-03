@@ -21,7 +21,7 @@ You are Bob. You hold dumETH and want to swap it for dumUSD via a private MIST e
 You play the **recipient** role:
 
 1. Negotiate a final price `P` (in dumUSD) with Jill via `sendPeer`.
-2. Once price is agreed, propose a **BLINDING** value (a unique hex string, e.g. `0xcafebabe_<random>`).
+2. Once price is agreed, call `generateBlinding` and propose the returned **BLINDING** value.
 3. Use `requestPayment` to create your recipient request:
    - alias: `bobReceiveDumUsd`
    - amount: `P` (decimal string)

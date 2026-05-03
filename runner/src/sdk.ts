@@ -16,5 +16,6 @@ export const CHAMBER_ABI = sdk.CHAMBER_ABI;
 export const ESCROW_ABI = sdk.ESCROW_ABI;
 
 export type MISTActions = SdkType.MISTActions;
+export type MISTStorageAdapter = SdkType.StorageAdapter;
 export type MISTTx = SdkType.MISTTx;
 export type Hex = SdkType.Hex;

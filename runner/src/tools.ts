@@ -9,10 +9,15 @@ import { sendToPeer } from './peer.ts';
 import { computeBalances } from './balance.ts';
 import type { SerializedRequest } from './types.ts';
 
-function toHex(value: string): Hex {
+const HEX_VALUE_RE = /^(?:0x)?[0-9a-fA-F]+$/;
+
+function toHex(value: string, label = 'hex value'): Hex {
 	const trimmed = value.trim();
+	if (!trimmed || !HEX_VALUE_RE.test(trimmed)) {
+		throw new Error(`Invalid ${label}: expected a hex string like 0xabc123.`);
+	}
 	const hex = trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`;
-	return hex as Hex;
+	return hex.toLowerCase() as Hex;
 }
 
 function generateBlindingValue(): Hex {
@@ -56,6 +61,7 @@ export function buildTools(agent: Agent) {
 				const tx = agent.mist.requestFunds(amount, tokenAddr);
 				const symbol = agent.tokenSymbolByAddress[tokenAddr.toLowerCase()];
 				agent.registerOwnRequest(alias, tx, symbol);
+				await agent.persistMistState('requestPayment');
 				return {
 					alias,
 					amount: tx.amount.toString(),
@@ -95,6 +101,7 @@ export function buildTools(agent: Agent) {
 				await agent.logger.blockchain('mist.balanceCheck.started', {});
 				const tokenSymbols = agent.tokenSymbolByAddress;
 				const mistBalances = await computeBalances(agent.mist, tokenSymbols);
+				await agent.persistMistState('showBalance');
 				const onchain: Array<{ token: string; symbol: string; balance: string }> = [];
 				for (const [symbol, addr] of Object.entries(agent.config.env.tokens)) {
 					const bal = await agent.chain.getErc20Balance(addr);
@@ -120,12 +127,13 @@ export function buildTools(agent: Agent) {
 			execute: async ({ creatorAlias, recipientAlias, blinding }) => {
 				const creator = agent.getRequest(creatorAlias);
 				const recipient = agent.getRequest(recipientAlias);
+				const blindingHex = toHex(blinding, 'BLINDING');
 				await agent.logger.blockchain('mist.escrowFund.started', {
 					creatorAlias,
 					recipientAlias,
-					blinding: toHex(blinding),
+					blinding: blindingHex,
 				});
-				const escrowReq = await agent.mist.escrowFund(creator.tx, recipient.tx, toHex(blinding));
+				const escrowReq = await agent.mist.escrowFund(creator.tx, recipient.tx, blindingHex);
 				await agent.logger.blockchain('mist.escrowFund.completed', {
 					creatorAlias,
 					recipientAlias,
@@ -153,7 +161,7 @@ export function buildTools(agent: Agent) {
 			execute: async ({ creatorAlias, recipientAlias, blinding }) => {
 				const creator = agent.getRequest(creatorAlias);
 				const recipient = agent.getRequest(recipientAlias);
-				const blindingHex = toHex(blinding);
+				const blindingHex = toHex(blinding, 'BLINDING');
 				await agent.logger.blockchain('mist.escrowClaim.started', {
 					creatorAlias,
 					recipientAlias,
@@ -195,6 +203,7 @@ export function buildTools(agent: Agent) {
 					amount: entry.tx.amount.toString(),
 				});
 				const status = await agent.mist.checkStatus(entry.tx);
+				await agent.persistMistState('checkRequestStatus');
 				await agent.logger.blockchain('mist.checkStatus.completed', { alias, status });
 				return { alias, status };
 			},
@@ -213,21 +222,22 @@ export function buildTools(agent: Agent) {
 				blinding: z
 					.string()
 					.optional()
-					.describe('Optional shared BLINDING value to communicate to the peer.'),
+					.describe('Optional shared BLINDING value to communicate to the peer. Prefer passing the exact value returned by generateBlinding.'),
 			}),
 			execute: async ({ message, share, blinding }) => {
 				const requests: SerializedRequest[] = (share ?? []).map((alias) => agent.serializeRequest(alias));
+				const normalizedBlinding = blinding ? toHex(blinding, 'BLINDING') : undefined;
 				await agent.logger.conversation('conversation.peer.sent', {
 					message,
 					share: share ?? [],
-					blinding,
+					blinding: normalizedBlinding,
 				});
 				try {
 					const ack = await sendToPeer(agent.config.env.peerUrl, {
 						from: agent.config.name,
 						content: message,
 						requests: requests.length ? requests : undefined,
-						blinding,
+						blinding: normalizedBlinding,
 					});
 					await agent.logger.conversation('conversation.peer.ack', {
 						ok: ack.ok,

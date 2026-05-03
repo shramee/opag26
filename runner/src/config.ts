@@ -11,6 +11,15 @@ export interface AgentConfig {
 	env: AgentEnv;
 }
 
+export interface ZeroGConfig {
+	privateKey: Hex;
+	rpcUrl: string;
+	indexerUrl: string;
+	kvRpcUrl: string;
+	flowAddress: Hex;
+	streamId?: Hex;
+}
+
 export interface AgentEnv {
 	privateKey: Hex;
 	rpcUrl: string;
@@ -24,6 +33,7 @@ export interface AgentEnv {
 	model: string;
 	maxStepsPerTurn: number;
 	verbose: boolean;
+	zeroG: ZeroGConfig | null;
 }
 
 function readFileIfExists(path: string): string | null {
@@ -60,6 +70,41 @@ function parsePort(raw: string | undefined, fallback: number): number {
 	return n;
 }
 
+function parseOptionalZeroG(env: Record<string, string | undefined>, defaultPrivateKey: Hex): ZeroGConfig | null {
+	const requested = Boolean(
+		env.ZERO_G_PRIVATE_KEY ||
+			env.ZERO_G_RPC_URL ||
+			env.ZERO_G_INDEXER_URL ||
+			env.ZERO_G_KV_RPC_URL ||
+			env.ZERO_G_FLOW_ADDRESS ||
+			env.ZERO_G_STREAM_ID,
+	);
+	if (!requested) return null;
+
+	const kvRpcUrl = env.ZERO_G_KV_RPC_URL?.trim();
+	const flowAddress = env.ZERO_G_FLOW_ADDRESS?.trim();
+	if (!kvRpcUrl || !flowAddress) {
+		return null;
+	}
+
+	const zeroGPrivateKey = env.ZERO_G_PRIVATE_KEY?.trim();
+	const privateKey = (zeroGPrivateKey
+		? zeroGPrivateKey.startsWith('0x')
+			? zeroGPrivateKey
+			: `0x${zeroGPrivateKey}`
+		: defaultPrivateKey) as Hex;
+	const streamId = env.ZERO_G_STREAM_ID?.trim();
+
+	return {
+		privateKey,
+		rpcUrl: env.ZERO_G_RPC_URL || 'https://evmrpc-testnet.0g.ai',
+		indexerUrl: env.ZERO_G_INDEXER_URL || 'https://indexer-storage-testnet-turbo.0g.ai',
+		kvRpcUrl,
+		flowAddress: flowAddress as Hex,
+		streamId: streamId ? (streamId as Hex) : undefined,
+	};
+}
+
 export function loadAgentConfig(agentDir: string): AgentConfig {
 	const dir = resolve(agentDir);
 	if (!existsSync(dir)) throw new Error(`Agent directory not found: ${dir}`);
@@ -77,6 +122,7 @@ export function loadAgentConfig(agentDir: string): AgentConfig {
 
 	const pk = requireEnv(env, 'PRIVATE_KEY');
 	const privateKey = (pk.startsWith('0x') ? pk : `0x${pk}`) as Hex;
+	const zeroG = parseOptionalZeroG(env, privateKey);
 
 	return {
 		dir,
@@ -96,6 +142,7 @@ export function loadAgentConfig(agentDir: string): AgentConfig {
 			model: env.MODEL || 'zai-org/GLM-5-FP8',
 			maxStepsPerTurn: Number(env.MAX_STEPS || '12'),
 			verbose: (env.VERBOSE || 'true').toLowerCase() !== 'false',
+				zeroG,
 		},
 	};
 }
