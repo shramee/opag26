@@ -9,10 +9,11 @@ import {
 import { encodeFunctionData, erc20Abi } from 'viem';
 import { CHAMBER_ABI } from './contracts/chamber';
 import { Hex, merkleProofForTx, proveMist, strToHex, toTokenUnits } from './utils';
-import { init } from './gnark';
-import { ProofResponse } from './gnark/types';
+import { init, proveEscrow } from './gnark';
+import { ProofResponse, SuccessResponse } from './gnark/types';
 import { proofToContractArgs } from './proof';
 import { MISTTxData, MISTTx } from './mistTx';
+import { ESCROW_ABI } from './contracts/escrow';
 
 export * from './mistTx';
 export * from './utils';
@@ -162,6 +163,109 @@ export class MISTActions {
 		return request;
 	}
 
+	// creator and recipients escrow flow
+	// (1) creator and recipient create and share their own requests
+	// (2) creator calls escrowDeposit
+	// (3) recipient calls escrowClaim to claim the recipient
+	// (4) recipient calls escrowClaim to claim the recipient
+	async escrowFund(creatorRequest: MISTTx, recipientRequest: MISTTx, blinding: Hex): Promise<MISTTx> {
+		const escrowKey = hash3(blinding, creatorRequest.requestTxHash(), recipientRequest.secrets);
+		const escrowOwner = this._chainAdapter.escrowContractAddress;
+		const escrowReq = new MISTTx({
+			amount: recipientRequest.amount,
+			token: recipientRequest.token,
+			secrets: hash2(escrowKey, escrowOwner),
+		});
+
+		await this.deposit(escrowReq);
+		return escrowReq;
+	}
+
+	async escrowClaim(creatorRequest: MISTTx, recipientRequest: MISTTx, blinding: Hex): Promise<any> {
+		const escrowKey = hash3(blinding, creatorRequest.requestTxHash(), recipientRequest.secrets);
+		const escrowOwner = this._chainAdapter.escrowContractAddress;
+		const escrowReq = new MISTTx({
+			amount: recipientRequest.amount,
+			token: recipientRequest.token,
+			secrets: hash2(escrowKey, escrowOwner),
+		});
+
+		// check escrow was created
+		const txStatus = await this.checkStatus(escrowReq);
+
+		if (txStatus !== 'PAID') {
+			throw new Error('Escrow not yet funded');
+		}
+
+		await this.deposit(creatorRequest);
+
+		await new Promise((resolve) => setTimeout(resolve, 5000)); // wait for deposit to be processed
+
+		const txLeaves = await this._getTxArray();
+		// escrow ZKP
+		const txHash = BigInt(creatorRequest.requestTxHash());
+		const txIndex = txLeaves.findIndex((leaf) => leaf === txHash);
+		if (txIndex === -1) throw new Error('Transaction not found in merkle tree — has it been paid?');
+
+		const { root: escrowMerkleRoot, proof: escrowMerkleProof } = merkleProofForTx(txLeaves, txHash);
+
+		const escrowProofResponse = await proveEscrow({
+			Blinding: blinding,
+			Owner: escrowOwner,
+			TxAsset: {
+				Addr: escrowReq.token,
+				Amount: escrowReq.amount.toString(),
+			},
+			RecipientSecret: recipientRequest.secrets,
+			SenderTx: creatorRequest.requestTxHash(),
+			MerkleProof: escrowMerkleProof,
+			MerkleRoot: escrowMerkleRoot,
+		}) as SuccessResponse;
+
+		if (escrowProofResponse.status !== "success") {
+			throw new Error(`Escrow proof generation failed: ${JSON.stringify(escrowProofResponse, undefined, 2)}`);
+		}
+
+		const escrowProof = proofToContractArgs(escrowProofResponse.proof) as unknown as readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+		const escrowPubIn = escrowProofResponse.publicInputs as unknown as readonly [bigint, bigint, bigint];
+
+		const { root, proof } = merkleProofForTx(txLeaves, BigInt(escrowReq.requestTxHash()));
+
+		const witness: Witness = {
+			ClaimingKey: escrowKey,
+			Owner: escrowOwner,
+			TxAsset: { Amount: escrowReq.amount.toString(), Addr: escrowReq.token },
+			MerkleProof: proof,
+			MerkleRoot: root,
+			Withdraw: {
+				Amount: '0', Addr: '0'
+			}, // zero withdrawal
+			Tx1Amount: escrowReq.amount.toString(), // full amount in tx1
+			Tx1Secret: recipientRequest.secrets
+		};
+
+		const mistProofResp = await proveMist(witness) as SuccessResponse;
+
+		if (mistProofResp.status !== "success") {
+			throw new Error(`Mist proof generation failed: ${JSON.stringify(mistProofResp, undefined, 2)}`);
+		}
+
+		const mistProof = proofToContractArgs(mistProofResp.proof) as unknown as readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+		const mistPubIn = mistProofResp.publicInputs as unknown as readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+
+		await this._chainAdapter.sendTransaction({
+			to: this._chainAdapter.escrowContractAddress,
+			data: encodeFunctionData({
+				abi: ESCROW_ABI,
+				functionName: 'consumeEscrow',
+				args: [escrowProof, escrowPubIn, mistProof, mistPubIn],
+			}),
+		});
+
+
+		// mist withdraw
+	}
+
 	// ─── Paying a request (payer role) ─────────────────────────────────────────
 
 	/**
@@ -259,26 +363,22 @@ export class MISTActions {
 			throw new Error('Private fields (_key, _owner) missing — only the requestor can withdraw');
 		}
 		const tokenAddr = request.token;
-		const txHashVal = BigInt(
-			txHash(request._key, request._owner, tokenAddr, request.amount.toString()),
-		);
-		const txIndex = txLeaves.findIndex((leaf) => leaf === txHashVal);
-		if (txIndex === -1) throw new Error('Transaction not found in merkle tree — has it been paid?');
+		const txHash = BigInt(request.requestTxHash());
 
-		const { root, proof } = merkleProofForTx(txLeaves, txHashVal);
-		const newTxSecret = deriveTxSecret(request._key, withdrawTo);
+		const { root, proof } = merkleProofForTx(txLeaves, txHash);
+
+		const isOwnerSelfAuth = request._owner === this.accountAddress;
 
 		const witness: Witness = {
 			ClaimingKey: request._key,
 			Owner: request._owner,
-			OwnerKey: this.accountAuthKey,
+			OwnerKey: isOwnerSelfAuth ? this.accountAuthKey : '0',
 			TxAsset: { Amount: request.amount.toString(), Addr: tokenAddr },
-			AuthDone: '1',
+			AuthDone: isOwnerSelfAuth ? '1' : '0',
 			MerkleProof: proof,
 			MerkleRoot: root,
 			Withdraw: { Amount: request.amount.toString(), Addr: tokenAddr },
 			WithdrawTo: withdrawTo,
-			Tx1Secret: newTxSecret.toString(),
 		};
 
 		const proofResp = await proveMist(witness);

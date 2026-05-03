@@ -38,10 +38,6 @@ export function strToHex(str: string): Hex {
 
 export type Hex = `0x${string}`;
 
-function h2hex(a: string, b: string): Hex {
-	return `0x${BigInt(hash2Sync(a, b)).toString(16)}`;
-}
-
 /** Convert a human-readable USDC amount like "10.00" → 10_000_000n */
 export function toTokenUnits(amount: string, decimals: number): bigint {
 	return BigInt(Math.round(parseFloat(amount) * 10 ** decimals));
