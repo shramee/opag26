@@ -1,10 +1,10 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { Chamber, DummyERC20, Escrow, PoseidonHelper } from "../typechain-types";
+import { Chamber, DummyERC20, Escrow } from "../typechain-types";
 import { proveEscrow, proveMist, mistcash, proofToContractArgs, init, merkleProofForTx, hash2 } from "@opag26/sdk";
 
 async function setup() {
-  const [admin, bob] = await ethers.getSigners();
+  const [admin, bob, jill] = await ethers.getSigners();
   const bobAddr = bob.address;
 
   await init(); // Initialize the WASM module before running tests
@@ -26,7 +26,7 @@ async function setup() {
   const EscrowVerifierFactory = await ethers.getContractFactory("EscrowVerifier");
   const EscrowVerifier = (await EscrowVerifierFactory.deploy()) as unknown as Escrow;
 
-  const EscrowFactory = await ethers.getContractFactory("Escrow", { libraries: poseidonLib });
+  const EscrowFactory = await ethers.getContractFactory("Escrow");
   const escrow = (await EscrowFactory.deploy(await chamber.getAddress(), await EscrowVerifier.getAddress())) as unknown as Escrow;
 
   // Act: approve and deposit 1 tknA
@@ -38,7 +38,7 @@ async function setup() {
   await chamber.deposit(0xffffffff456n, 25n, await tknA.getAddress());
   await chamber.deposit(0xffffffff567n, 34n, await tknA.getAddress());
 
-  return { admin, bob, bobAddr, tknA, tknB, chamber, escrow };
+  return { admin, bob, jill, bobAddr, tknA, tknB, chamber, escrow };
 }
 
 describe("Chamber", function () {
@@ -48,7 +48,7 @@ describe("Chamber", function () {
     // Arrange: compute the deposit key and expected tx hash
     const claimingKey = 1234n;
     const depositKey = await hash2(String(claimingKey), admin.address);
-    const expectedTxHash = await chamber.hashWithAsset(depositKey, await tknA.getAddress(), 1n);
+    const senderTxHash = await chamber.hashWithAsset(depositKey, await tknA.getAddress(), 1n);
 
     // Act: approve and deposit 1 tknA
     await tknA.approve(await chamber.getAddress(), 1n);
@@ -56,11 +56,11 @@ describe("Chamber", function () {
     await chamber.deposit(depositKey, 1n, await tknA.getAddress());
 
     // Assert: tx exists in Chamber's array
-    const [exists] = await chamber.transactionsExist([expectedTxHash]);
+    const [exists] = await chamber.transactionsExist([senderTxHash]);
     expect(exists).to.be.true;
 
     const transactions = await chamber.getTxArray();
-    const { root, proof } = merkleProofForTx(transactions, expectedTxHash);
+    const { root, proof } = merkleProofForTx(transactions, senderTxHash);
 
     const witness = {
       ClaimingKey: claimingKey.toString(),
@@ -93,53 +93,158 @@ describe("Chamber", function () {
 });
 
 describe("Escrow", function () {
-  function prepareEscrow() {
+  const BLINDING = '0xcafebabe_deadbeef';
 
+  async function prepareEscrow() {
+    const { admin, bob, bobAddr, tknA, tknB, chamber, escrow } = await setup();
+    await tknA.transfer(bobAddr, 100_000n);
+
+    const expectedNote = {
+      key: await hash2("1234", '0xb0b'),
+      token: await tknA.getAddress(),
+      amount: '2',
+    };
+
+    const senderTx = await chamber.hashWithAsset(
+      expectedNote.key,
+      expectedNote.token,
+      expectedNote.amount,
+    );
+
+    const escrowClaimingKey = await hash2(BLINDING, String(senderTx));
+    const escrowTxSecret = await hash2(escrowClaimingKey, await escrow.getAddress());
+
+    const escrowNote = {
+      key: escrowClaimingKey,
+      token: await tknB.getAddress(),
+      amount: '10000',
+    };
+
+    await tknB.approve(await chamber.getAddress(), escrowNote.amount);
+    await chamber.deposit(escrowTxSecret, escrowNote.amount, escrowNote.token);
+
+    const escrowTx = await chamber.hashWithAsset(
+      escrowTxSecret,
+      escrowNote.token,
+      escrowNote.amount,
+    );
+
+    const txs = { expectedNote, escrowNote, senderTx, escrowTx, escrowClaimingKey };
+
+    return {
+      admin,
+      bob,
+      bobAddr,
+      tknA,
+      tknB,
+      chamber,
+      escrow,
+      txs,
+    };
   }
 
-  it("deposit adds a tx hash to the merkle tree", async function () {
-    const { admin, bob, bobAddr, tknA, tknB, chamber, escrow } = await setup();
-    // Arrange: compute the deposit key and expected tx hash
-    const claimingKey = '1234';
-    const depositKey = await hash2(claimingKey, admin.address);
-    const expectedTxHash = await chamber.hashWithAsset(depositKey, await tknA.getAddress(), 1n);
+  it("depositAndConsumeEscrowNoZk releases escrow in one shot", async function () {
+    const { bob, bobAddr, tknA, tknB, chamber, escrow, txs } = await prepareEscrow();
+    const { expectedNote, escrowNote, senderTx, escrowTx } = txs;
 
-    // Act: approve and deposit 1 tknA
-    await tknA.approve(await chamber.getAddress(), 1n);
-    // actual test transaction
-    await chamber.deposit(depositKey, 1n, await tknA.getAddress());
+    const nextTransactions = [...(await chamber.getTxArray()), senderTx];
+    const { proof: senderTxProof } = merkleProofForTx(nextTransactions, senderTx);
+    const { proof: escrowNoteProof } = merkleProofForTx(nextTransactions, escrowTx);
 
-    // Assert: tx exists in Chamber's array
-    const [exists] = await chamber.transactionsExist([expectedTxHash]);
-    expect(exists).to.be.true;
+    await tknA.connect(bob).approve(await escrow.getAddress(), expectedNote.amount);
+    await escrow.connect(bob).depositAndConsumeEscrowNoZk(
+      expectedNote,
+      senderTx,
+      senderTxProof,
+      escrowNote,
+      escrowNoteProof,
+      bobAddr,
+    );
 
+    const [senderTxExists] = await chamber.transactionsExist([senderTx]);
+    const [escrowTxExists] = await chamber.transactionsExist([escrowTx]);
+
+    expect(senderTxExists).to.equal(true);
+    expect(escrowTxExists).to.equal(true);
+    expect(await tknA.balanceOf(bobAddr)).to.equal(99_998n);
+    expect(await tknB.balanceOf(bobAddr)).to.equal(10_000n);
+  });
+
+  it("depositAndConsumeEscrow with Zk", async function () {
+    const { bob, bobAddr, tknA, tknB, chamber, escrow, txs } = await prepareEscrow();
+    const { expectedNote, escrowNote, senderTx, escrowTx, escrowClaimingKey } = txs;
+
+    const nextTransactions = [...(await chamber.getTxArray()), senderTx];
     const transactions = await chamber.getTxArray();
-    const { root, proof } = merkleProofForTx(transactions, expectedTxHash);
+    const { proof: senderTxProof, root: merkleRoot } = merkleProofForTx(nextTransactions, senderTx);
+    const { proof: escrowNoteProof } = merkleProofForTx(nextTransactions, escrowTx);
 
-    const witness = {
-      ClaimingKey: claimingKey,
-      Owner: admin.address,
+    await tknA.connect(bob).approve(await escrow.getAddress(), expectedNote.amount);
+
+    const escrowProofResponse = await proveEscrow({
+      Blinding: escrowNote.key,
+      Owner: await escrow.getAddress(),
       TxAsset: {
-        Addr: await tknA.getAddress(),
-        Amount: "1"
+        Addr: escrowNote.token,
+        Amount: escrowNote.amount.toString(),
       },
-      MerkleProof: proof,
-      MerkleRoot: root,
+      // EscrowNullifier: "EscrowNullifier",
+      RecipientSecret: senderTx.toString(),
+      SenderTx: senderTx.toString(),
+      MerkleProof: senderTxProof,
+      MerkleRoot: merkleRoot,
+    }) as mistcash.SuccessResponse;
+
+    if (escrowProofResponse.status !== "success") {
+      throw new Error(`Escrow proof generation failed: ${JSON.stringify(escrowProofResponse, undefined, 2)}`);
+    }
+
+    const escrowProof = proofToContractArgs(escrowProofResponse.proof);
+
+    const witness: mistcash.Witness = {
+      ClaimingKey: escrowClaimingKey,
+      Owner: await escrow.getAddress(),
+      TxAsset: {
+        Addr: expectedNote.token,
+        Amount: expectedNote.amount.toString(),
+      },
+      MerkleProof: escrowNoteProof,
+      MerkleRoot: merkleRoot,
+      OwnerKey: "0",
+      AuthDone: "0",
       Withdraw: {
-        Addr: await tknA.getAddress(),
-        Amount: "1"
+        Addr: expectedNote.token,
+        Amount: expectedNote.amount.toString(),
       },
       WithdrawTo: bobAddr,
     };
 
-    const proofResponse = await proveMist(witness)
+    const mistProofResp = await proveMist(witness) as mistcash.SuccessResponse;
 
-    expect(proofResponse.status).to.equal("success");
+    const mistProof = proofToContractArgs(mistProofResp.proof);
 
-    if (proofResponse.status == "success") {
-      const proof = proofToContractArgs(proofResponse.proof);
-      await chamber.handleZkp(proof, proofResponse.publicInputs);
-      expect(String(await tknA.balanceOf(bobAddr))).to.equal("1");
-    }
+    await escrow.connect(bob).depositAndConsumeEscrow(
+      expectedNote,
+      escrowProof,
+      [escrowProofResponse.publicInputs[0], escrowProofResponse.publicInputs[1], escrowProofResponse.publicInputs[2]], // Pass only the necessary public inputs for the Escrow proof verification
+      mistProof,
+      mistProofResp.publicInputs,
+    );
+    // await escrow.connect(bob).depositAndConsumeEscrow(
+    //   expectedNote,
+    //   senderTx,
+    //   senderTxProof,
+    //   escrowNote,
+    //   escrowNoteProof,
+    //   bobAddr,
+    // );
+
+    const [senderTxExists] = await chamber.transactionsExist([senderTx]);
+    const [escrowTxExists] = await chamber.transactionsExist([escrowTx]);
+
+    expect(senderTxExists).to.equal(true);
+    expect(escrowTxExists).to.equal(true);
+    expect(await tknA.balanceOf(bobAddr)).to.equal(99_998n);
+    expect(await tknB.balanceOf(bobAddr)).to.equal(10_000n);
   });
 });
