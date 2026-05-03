@@ -2,13 +2,12 @@ import {
 	hash2Sync as hash2,
 	txSecret as deriveTxSecret,
 	txHash,
-	full_prove,
 	type Witness,
 	hash_with_asset,
 } from '@mistcash/sdk';
 import { encodeFunctionData, erc20Abi } from 'viem';
 import { CHAMBER_ABI } from './contracts/chamber';
-import { fromTokenUnits, Hex, merkleProofForTx, proveMist, strToHex, toTokenUnits } from './utils';
+import { Hex, merkleProofForTx, proveMist, strToHex, toTokenUnits } from './utils';
 import { init } from './gnark';
 import { ProofResponse } from './gnark/types';
 import { proofToContractArgs } from './proof';
@@ -161,10 +160,7 @@ export class MISTActions {
 		const txIndex = this.txCount++;
 		const owner = recipient || this.accountAddress;
 
-		// Derive a fresh one-time key for this payment slot
 		const claimingKey = hash2(`${txIndex}`, this.masterHidingKey);
-
-		// txSecret commits claimingKey → owner without exposing either on-chain
 		const secrets = `0x${BigInt(deriveTxSecret(claimingKey, owner)).toString(16)}` as Hex;
 
 		const request: RequestMIST = {
@@ -202,7 +198,6 @@ export class MISTActions {
 	): Promise<Hex> {
 		const token = request.token as Hex;
 
-		// Step 1 — authorise Chamber to pull the tokens
 		await walletClient.sendTransaction({
 			to: token,
 			data: encodeFunctionData({
@@ -212,7 +207,6 @@ export class MISTActions {
 			}),
 		});
 
-		// Step 2 — lock tokens against this txSecret in the Chamber merkle tree
 		return walletClient.sendTransaction({
 			to: chamberAddress,
 			data: encodeFunctionData({
@@ -238,7 +232,7 @@ export class MISTActions {
 	): Promise<'PENDING' | 'PAID' | 'WITHDRAWN'> {
 		if (request._status === 'WITHDRAWN') return 'WITHDRAWN';
 
-		const [amount, addr] = (await publicClient.readContract({
+		const [, addr] = (await publicClient.readContract({
 			address: chamberAddress,
 			abi: CHAMBER_ABI,
 			functionName: 'assetsFromSecret',
@@ -292,18 +286,13 @@ export class MISTActions {
 
 		const amountRaw = toTokenUnits(request.amount);
 		const tokenAddr = request.token;
-
-		// Locate this request's tx hash in the merkle tree
 		const txHashVal = BigInt(
 			txHash(request._key, request._owner, tokenAddr, amountRaw.toString()),
 		);
 		const txIndex = txLeaves.findIndex((leaf) => leaf === txHashVal);
 		if (txIndex === -1) throw new Error('Transaction not found in merkle tree — has it been paid?');
 
-		// Compute merkle path (last element is the root; exclude it)
 		const { root, proof } = merkleProofForTx(txLeaves, txHashVal);
-
-		// New transaction secret for the "change" output (amount 0 = full withdrawal)
 		const newTxSecret = deriveTxSecret(request._key, withdrawTo);
 
 		const witness: Witness = {
@@ -325,7 +314,7 @@ export class MISTActions {
 		if (!result.success) throw new Error(result.error ?? 'ZK withdrawal failed');
 
 		request._status = 'WITHDRAWN';
-		this.save(); // Persist the status update
+		this.save();
 		return result.transactionHash ?? '';
 	}
 
@@ -357,7 +346,6 @@ export class MISTActions {
 			}
 		});
 	}
-
 
 	/**
 	 * Recover a previously-created request by index.
@@ -409,17 +397,6 @@ export class MISTActions {
 		};
 	}
 
-	/** Restore a MISTActions instance from a previously exported snapshot. */
-	static fromStore(state: MISTState, masterKey: string, store: StorageAdapter): MISTActions {
-		const instance = new MISTActions(masterKey, store);
-		instance.txCount = state.txCount;
-		instance.requests = state.requests;
-		return instance;
-	}
-
-	// ─── helpers ─────────────────────────────────────────────────────────
-
-	/** Find the index of a request's tx hash in the on-chain merkle tree. */
 	private async _locateTx(
 		request: RequestMIST,
 		amountRaw: bigint,
