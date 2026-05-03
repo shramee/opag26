@@ -1,4 +1,4 @@
-# Contracts | MIST OTC
+# Contracts | Agents with MIST
 
 This version of the escrow flow binds the escrow to both the sender's expected transaction and a recipient secret. That prevents third-party claim sniping after the recipient makes the payment and lets payment and escrow claim happen in separate private transactions.
 

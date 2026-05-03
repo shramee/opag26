@@ -1,4 +1,4 @@
-# MIST-OTC
+# Agents with MIST
 
 Private OTC escrow built on [MIST.cash](https://mist.cash). Two parties swap arbitrary ERC-20s atomically and privately: payments are unlinkable on-chain, escrow claims can't be sniped, and the funding/claim transactions stay disconnected. Comes with an LLM agent runner so two AI agents can negotiate and execute the full private swap end-to-end.
 
