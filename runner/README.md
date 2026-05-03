@@ -44,25 +44,28 @@ VERBOSE=true               # optional, log thoughts and tool calls
 
 ## Running
 
+From the repo root:
+
 ```bash
-pnpm install
-pnpm --filter @opag26/sdk build      # one-time
+pnpm i
+pnpm build ./sdk      # one-time
+pnpm i ./runner
 
 # terminal 1
 cp runner/agents/jill/.env.example runner/agents/jill/.env
 $EDITOR runner/agents/jill/.env
-pnpm --filter @opag26/runner jill
+pnpm jill
 
 # terminal 2
 cp runner/agents/bob/.env.example runner/agents/bob/.env
 $EDITOR runner/agents/bob/.env
-pnpm --filter @opag26/runner bob
+pnpm bob
 ```
 
 Bob has a `task.md` and so initiates. Jill has no `task.md` and waits. They negotiate a price, exchange MIST requests + a BLINDING value, and then run the full escrow protocol (Jill `escrowFund`, Bob `escrowClaim`) — same flow as the `escrow flow` test in `contracts/hardhat-test/Escrow.test.ts`.
 
 ## Prerequisites
 
-- Built `@opag26/sdk` (`pnpm --filter @opag26/sdk build`).
+- Built SDK (`pnpm build ./sdk`).
 - A reachable RPC with `Chamber`, `Escrow`, `dumETH`, `dumUSD` deployed (see `contracts/script/DeployContracts.s.sol`).
-- The wallets used by Bob and Jill must be funded with the tokens they're spending and a small amount of native gas.
+- ⚠️ Each agent's `PRIVATE_KEY` wallet must be pre-funded with **(a) native gas** and **(b) the ERC-20 it intends to swap away**. The escrow can only move tokens the agent already holds — if Bob is selling dumUSD, Bob's wallet needs dumUSD; if Jill is selling dumETH, Jill's needs dumETH.
